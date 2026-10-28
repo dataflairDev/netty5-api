@@ -367,4 +367,25 @@ class PacketCodecTest {
         assertEquals("s", small.message());
         channel.finishAndReleaseAll();
     }
+
+    /**
+     * Array names, primitive names and non-public classes are rejected in open mode without initialisation.
+     */
+    @Test
+    void arrayPrimitiveAndNonPublicNamesAreRejected() {
+        var registry = new PacketRegistry();
+        assertFalse(registry.restrictToRegistered(), "open mode is the default");
+        for (var name : List.of("[Lfoo;", "[L" + TestPacket.class.getName() + ";", "[I", "int", "void",
+                "de.dataflair.netty5.testpackets.NonPublicProbePacket")) {
+            assertThrows(PacketRejectedException.class, () -> registry.resolve(name), name);
+        }
+        var channel = channel();
+        assertThrows(PacketRejectedException.class, () -> channel.writeInbound(frame("[Lfoo;", new byte[0])));
+        assertThrows(PacketRejectedException.class, () -> channel.writeInbound(frame("int", new byte[0])));
+        assertThrows(PacketRejectedException.class, () -> channel.writeInbound(
+                frame("de.dataflair.netty5.testpackets.NonPublicProbePacket", new byte[0])));
+        assertNull(channel.readInbound());
+        assertFalse(ProbeFlags.NON_PUBLIC_PACKET_INITIALIZED.get(), "non-public packet must not be initialised");
+        channel.finishAndReleaseAll();
+    }
 }

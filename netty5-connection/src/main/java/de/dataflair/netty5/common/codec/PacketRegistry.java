@@ -14,11 +14,20 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Resolves the class names received on the wire to packet classes.
  * <p>
- * By default every public, concrete {@link Packet} subclass with a public {@code (CodecBuffer)} constructor that
- * is visible to the configured class loader is accepted. The class is loaded <b>without initialisation</b> and is
- * only instantiated after these checks passed. With {@link #restrictToRegistered(boolean)} the registry acts as an
- * allowlist and only classes passed to {@link #register(Class[])} are accepted; the built-in packets of this
- * library are always registered.
+ * The registry has two modes:
+ * <ul>
+ *     <li><b>Open mode (default).</b> Every class visible to the configured class loader is accepted if it is a
+ *     public, concrete (neither abstract nor an interface) {@link Packet} subclass with a public
+ *     {@code (CodecBuffer)} constructor. The class is loaded <b>without initialisation</b>; its static
+ *     initialiser only runs once all checks passed. Names that do not denote such a class are rejected with a
+ *     {@link PacketRejectedException}: unknown classes, non-packet classes, array names such as {@code [Lfoo;},
+ *     primitive names such as {@code int}, abstract and non-public classes. Open mode trusts every packet class on
+ *     the class path; a peer can make the receiver instantiate any of them.</li>
+ *     <li><b>Allowlist mode</b> ({@link #restrictToRegistered(boolean) restrictToRegistered(true)}). Only classes
+ *     passed to {@link #register(Class[])} are accepted, every other name is rejected without loading a class.
+ *     Recommended for servers reachable by untrusted peers.</li>
+ * </ul>
+ * The built-in packets of this library ({@link AuthPacket} and the JSON packets) are always registered.
  */
 public final class PacketRegistry {
     private final Map<String, Class<? extends Packet>> registered = new ConcurrentHashMap<>();
