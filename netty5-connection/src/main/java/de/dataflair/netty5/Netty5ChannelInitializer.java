@@ -32,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channel> {
     private final Netty5ClientChannel.Identity identity;
     private final int maxFrameLength;
+    private final int preAuthMaxFrameLength;
     private final PacketRegistry packetRegistry;
     private final boolean requireAuthentication;
 
@@ -40,20 +41,41 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
     }
 
     /**
-     * @param identity              identity used for log messages, may be null
-     * @param maxFrameLength        maximum accepted frame length in bytes; larger frames are rejected
-     * @param packetRegistry        registry used to resolve incoming packet classes, null for the default registry
-     * @param requireAuthentication if true only the auth packet is accepted until the channel is authenticated
+     * Uses {@link Netty5ChannelUtils#DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH} as frame limit before authentication.
+     *
+     * @see #Netty5ChannelInitializer(Netty5ClientChannel.Identity, int, int, PacketRegistry, boolean)
      */
     public Netty5ChannelInitializer(@Nullable Netty5ClientChannel.Identity identity,
                                     int maxFrameLength,
                                     @Nullable PacketRegistry packetRegistry,
                                     boolean requireAuthentication) {
+        this(identity, maxFrameLength, Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, packetRegistry,
+                requireAuthentication);
+    }
+
+    /**
+     * @param identity              identity used for log messages, may be null
+     * @param maxFrameLength        maximum frame length in bytes (including the length field); larger incoming
+     *                              frames are rejected, larger outgoing packets fail to encode
+     * @param preAuthMaxFrameLength maximum incoming frame length in bytes (including the length field) while the
+     *                              channel is not authenticated; only used if {@code requireAuthentication} is set
+     * @param packetRegistry        registry used to resolve incoming packet classes, null for the default registry
+     * @param requireAuthentication if true only the auth packet is accepted until the channel is authenticated
+     */
+    public Netty5ChannelInitializer(@Nullable Netty5ClientChannel.Identity identity,
+                                    int maxFrameLength,
+                                    int preAuthMaxFrameLength,
+                                    @Nullable PacketRegistry packetRegistry,
+                                    boolean requireAuthentication) {
         if (maxFrameLength <= 0) {
             throw new IllegalArgumentException("maxFrameLength must be positive: " + maxFrameLength);
         }
+        if (preAuthMaxFrameLength <= 0) {
+            throw new IllegalArgumentException("preAuthMaxFrameLength must be positive: " + preAuthMaxFrameLength);
+        }
         this.identity = identity;
         this.maxFrameLength = maxFrameLength;
+        this.preAuthMaxFrameLength = preAuthMaxFrameLength;
         this.packetRegistry = packetRegistry == null ? new PacketRegistry() : packetRegistry;
         this.requireAuthentication = requireAuthentication;
     }
@@ -62,9 +84,9 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
     protected void initChannel(@NotNull Channel channel) {
         channel.pipeline()
                 .addLast(new LengthFieldBasedFrameDecoder(maxFrameLength, 0, Integer.BYTES, 0, Integer.BYTES))
-                .addLast(new PacketDecoder(identity, packetRegistry, requireAuthentication))
+                .addLast(new PacketDecoder(identity, packetRegistry, requireAuthentication, preAuthMaxFrameLength))
                 .addLast(new LengthFieldPrepender(Integer.BYTES))
-                .addLast(new PacketEncoder(identity))
+                .addLast(new PacketEncoder(identity, maxFrameLength))
                 .addLast(handler());
     }
 

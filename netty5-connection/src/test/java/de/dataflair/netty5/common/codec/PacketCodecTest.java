@@ -268,4 +268,103 @@ class PacketCodecTest {
         assertNull(channel.readOutbound());
         channel.finishAndReleaseAll();
     }
+
+    static EmbeddedChannel preAuthChannel(int maxFrameLength, int preAuthMaxFrameLength) {
+        return new EmbeddedChannel(new Netty5ChannelInitializer(null, maxFrameLength, preAuthMaxFrameLength,
+                new PacketRegistry(), true) {
+            @Override
+            public SimpleChannelInboundHandler<?> handler() {
+                return new SimpleChannelInboundHandler<Packet>() {
+                    @Override
+                    protected void channelRead0(ChannelHandlerContext ctx, Packet msg) {
+                        ctx.fireChannelRead(msg);
+                    }
+                };
+            }
+        });
+    }
+
+    /**
+     * Before authentication frames are limited to the pre-auth frame length (default 64 KiB); a larger auth
+     * packet closes the channel, after authentication the regular limit applies.
+     */
+    @Test
+    void preAuthFrameLimitClosesChannel() {
+        assertEquals(64 * 1024, Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH);
+        assertEquals(64 * 1024, new Netty5Server("127.0.0.1", 0).preAuthMaxFrameLength());
+
+        var channel = preAuthChannel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, 256);
+        var bigAuth = new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()),
+                Map.of("token", "x".repeat(512)));
+        assertThrows(PacketRejectedException.class, () -> roundTrip(channel, bigAuth));
+        assertFalse(channel.isOpen(), "channel must be closed");
+        channel.finishAndReleaseAll();
+
+        var authenticated = preAuthChannel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, 256);
+        AuthPacket smallAuth = roundTrip(authenticated,
+                new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
+        assertEquals("c", smallAuth.identity().name());
+        authenticated.attr(Netty5ChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
+        TestPacket large = roundTrip(authenticated, new TestPacket("y".repeat(1024), 3));
+        assertEquals(1024, large.message().length());
+        assertTrue(authenticated.isOpen());
+        authenticated.finishAndReleaseAll();
+    }
+
+    /**
+     * An auth packet with more than {@link AuthPacket#MAX_PROPERTIES} properties is rejected on both sides.
+     */
+    @Test
+    void authPacketWithTooManyPropertiesIsRejected() {
+        var identity = new Netty5ClientChannel.Identity("c", UUID.randomUUID());
+        var tooMany = new java.util.HashMap<String, String>();
+        for (int i = 0; i <= AuthPacket.MAX_PROPERTIES; i++) {
+            tooMany.put("k" + i, "v");
+        }
+        assertThrows(IllegalArgumentException.class, () -> new AuthPacket(identity, tooMany));
+
+        var content = CodecBuffer.allocate();
+        content.writeStream(identity).writeInt(AuthPacket.MAX_PROPERTIES + 1);
+        for (int i = 0; i <= AuthPacket.MAX_PROPERTIES; i++) {
+            content.writeString("k" + i).writeString("v");
+        }
+        var bytes = new byte[content.origin().readableBytes()];
+        content.origin().readBytes(bytes);
+        content.origin().release();
+        var channel = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry(), true);
+        assertThrows(PacketRejectedException.class,
+                () -> channel.writeInbound(frame(AuthPacket.class.getName(), bytes)));
+        assertNull(channel.readInbound());
+        channel.finishAndReleaseAll();
+
+        var max = new java.util.HashMap<String, String>();
+        for (int i = 0; i < AuthPacket.MAX_PROPERTIES; i++) {
+            max.put("k" + i, "v");
+        }
+        var accepted = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry(), true);
+        AuthPacket decoded = roundTrip(accepted, new AuthPacket(identity, max));
+        assertEquals(AuthPacket.MAX_PROPERTIES, decoded.properties().size());
+        accepted.finishAndReleaseAll();
+    }
+
+    /**
+     * A packet that does not fit into maxFrameLength fails the write promise and writes nothing.
+     */
+    @Test
+    void tooLargeOutgoingPacketFailsWritePromise() {
+        var channel = channel(64, new PacketRegistry(), false);
+        var future = channel.writeAndFlush(new TestPacket("z".repeat(200), 1));
+        assertTrue(future.isDone());
+        assertFalse(future.isSuccess());
+        Throwable cause = future.cause();
+        while (cause != null && !(cause instanceof TooLongFrameException)) {
+            cause = cause.getCause();
+        }
+        assertNotNull(cause, "expected TooLongFrameException, got " + future.cause());
+        assertNull(channel.readOutbound(), "nothing must be written");
+
+        TestPacket small = roundTrip(channel, new TestPacket("s", 1));
+        assertEquals("s", small.message());
+        channel.finishAndReleaseAll();
+    }
 }

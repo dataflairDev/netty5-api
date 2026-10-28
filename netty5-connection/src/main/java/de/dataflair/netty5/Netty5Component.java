@@ -53,6 +53,12 @@ public abstract class Netty5Component {
     @Setter
     private volatile int maxFrameLength = Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH;
     /**
+     * Maximum accepted frame length in bytes while a channel that requires authentication is not yet
+     * authenticated, default 64 KiB. Only used by the server. Must be set before {@link #initialize()}.
+     */
+    @Setter
+    private volatile int preAuthMaxFrameLength = Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH;
+    /**
      * Registry used to resolve incoming packet classes. Must be set before {@link #initialize()}.
      */
     @Setter

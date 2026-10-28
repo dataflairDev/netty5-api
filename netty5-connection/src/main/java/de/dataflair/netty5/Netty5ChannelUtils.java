@@ -50,6 +50,12 @@ public class Netty5ChannelUtils {
     public final int DEFAULT_MAX_FRAME_LENGTH = 16 * 1024 * 1024;
 
     /**
+     * Default maximum frame length before authentication (64 KiB). Only applies to channels that require
+     * authentication.
+     */
+    public final int DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH = 64 * 1024;
+
+    /**
      * Set on a server side child channel once the peer has been authenticated.
      * The {@link de.dataflair.netty5.common.codec.PacketDecoder} only accepts the auth packet until it is set.
      */

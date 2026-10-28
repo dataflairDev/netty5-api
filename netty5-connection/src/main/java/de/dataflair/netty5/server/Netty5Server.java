@@ -80,7 +80,8 @@ public final class Netty5Server extends Netty5Component {
 
     @Override
     public void initialize() throws Exception {
-        var initializer = new Netty5ChannelInitializer(this.serverIdentity, maxFrameLength(), packetRegistry(), true) {
+        var initializer = new Netty5ChannelInitializer(this.serverIdentity, maxFrameLength(), preAuthMaxFrameLength(),
+                packetRegistry(), true) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new Netty5ServerHandler(Netty5Server.this);

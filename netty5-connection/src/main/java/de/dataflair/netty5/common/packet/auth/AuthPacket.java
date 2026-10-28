@@ -29,10 +29,20 @@ import java.util.Map;
 
 @Getter
 public class AuthPacket extends Packet {
+    /**
+     * Maximum number of auth properties. The auth packet is read before the peer is authenticated, so its size
+     * is bounded.
+     */
+    public static final int MAX_PROPERTIES = 256;
+
     protected final Netty5ClientChannel.Identity identity;
     protected final Map<String, String> properties;
 
     public AuthPacket(@NotNull Netty5ClientChannel.Identity identity, @NotNull Map<String, String> properties) {
+        if (properties.size() > MAX_PROPERTIES) {
+            throw new IllegalArgumentException("Too many auth properties: " + properties.size()
+                    + " (max " + MAX_PROPERTIES + ")");
+        }
         this.identity = identity;
         this.properties = properties;
         buffer.writeStream(this.identity)
@@ -42,6 +52,12 @@ public class AuthPacket extends Packet {
     public AuthPacket(@NotNull CodecBuffer buffer) {
         super(buffer);
         this.identity = buffer.readStream(new Netty5ClientChannel.Identity());
+        var origin = buffer.origin();
+        var size = origin.readableBytes() >= Integer.BYTES ? origin.getInt(origin.readerIndex()) : 0;
+        if (size < 0 || size > MAX_PROPERTIES) {
+            throw new IllegalArgumentException("Invalid number of auth properties: " + size
+                    + " (max " + MAX_PROPERTIES + ")");
+        }
         this.properties = buffer.readMap(new HashMap<>(), buffer::readString, buffer::readString);
     }
 }

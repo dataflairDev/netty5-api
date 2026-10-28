@@ -47,7 +47,8 @@ import java.util.List;
  * The class named in the frame is resolved through the {@link PacketRegistry} without initialisation and is
  * only instantiated if it is a concrete packet class. If {@code requireAuthentication} is set, any packet other
  * than {@link AuthPacket} is rejected (and the channel closed) until {@link Netty5ChannelUtils#AUTHENTICATED}
- * is set on the channel. Before authentication no class other than the auth packet is even loaded.
+ * is set on the channel. Before authentication no class other than the auth packet is even loaded, and a frame
+ * longer than {@code preAuthMaxFrameLength} (including the length field) closes the channel.
  */
 public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
     /**
@@ -59,6 +60,7 @@ public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
     private final Netty5ClientChannel.Identity identity;
     private final PacketRegistry packetRegistry;
     private final boolean requireAuthentication;
+    private final int preAuthMaxFrameLength;
 
     public PacketDecoder(@Nullable Netty5ClientChannel.Identity identity) {
         this(identity, null, false);
@@ -67,14 +69,35 @@ public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
     public PacketDecoder(@Nullable Netty5ClientChannel.Identity identity,
                          @Nullable PacketRegistry packetRegistry,
                          boolean requireAuthentication) {
+        this(identity, packetRegistry, requireAuthentication, Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH);
+    }
+
+    /**
+     * @param preAuthMaxFrameLength maximum frame length in bytes (including the length field) before
+     *                              authentication; only used if {@code requireAuthentication} is set
+     */
+    public PacketDecoder(@Nullable Netty5ClientChannel.Identity identity,
+                         @Nullable PacketRegistry packetRegistry,
+                         boolean requireAuthentication,
+                         int preAuthMaxFrameLength) {
         super(ByteBuf.class);
+        if (preAuthMaxFrameLength <= 0) {
+            throw new IllegalArgumentException("preAuthMaxFrameLength must be positive: " + preAuthMaxFrameLength);
+        }
         this.identity = identity;
         this.packetRegistry = packetRegistry == null ? new PacketRegistry() : packetRegistry;
         this.requireAuthentication = requireAuthentication;
+        this.preAuthMaxFrameLength = preAuthMaxFrameLength;
     }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf frame, List<Object> out) {
+        if (requireAuthentication && !isAuthenticated(ctx)
+                && (long) frame.readableBytes() + Integer.BYTES > preAuthMaxFrameLength) {
+            ctx.close();
+            throw new PacketRejectedException(prefix() + "Frame of " + (frame.readableBytes() + Integer.BYTES)
+                    + " bytes before authentication exceeds " + preAuthMaxFrameLength + " bytes");
+        }
         if (frame.readableBytes() < Integer.BYTES) {
             throw new PacketRejectedException(prefix() + "Frame too short: " + frame.readableBytes() + " bytes");
         }
