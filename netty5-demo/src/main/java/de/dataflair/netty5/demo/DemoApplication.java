@@ -3,7 +3,11 @@ package de.dataflair.netty5.demo;
 import de.dataflair.netty5.demo.packets.UserLookupRequest;
 import de.dataflair.netty5.demo.packets.UserLookupResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -17,7 +21,12 @@ import java.util.concurrent.TimeUnit;
  */
 public final class DemoApplication {
     private static final String HOST = "127.0.0.1";
-    private static final String TOKEN = "demo-secret";
+    /**
+     * Environment variable with the token of the demo client.
+     */
+    public static final String TOKEN_VARIABLE = "NETTY5_DEMO_TOKEN";
+    private static final String FALLBACK_TOKEN = "demo-secret";
+    private static final Logger LOGGER = LoggerFactory.getLogger(DemoApplication.class);
 
     private DemoApplication() {
     }
@@ -31,14 +40,15 @@ public final class DemoApplication {
      * Runs the demo. Throws if any step fails or times out.
      */
     public static Result run() throws Exception {
-        var server = new DemoServer(HOST, 0, TOKEN);
+        var token = token();
+        var server = new DemoServer(HOST, 0, Map.of("demo-client", token));
         DemoClient client = null;
         DemoClient intruder = null;
         try {
             server.start();
 
             // 1. authentication: accepted and rejected client
-            client = new DemoClient(HOST, server.port(), "demo-client", TOKEN);
+            client = new DemoClient(HOST, server.port(), "demo-client", token);
             client.connect().get(5, TimeUnit.SECONDS);
             var authenticated = server.firstAuthenticated().get(5, TimeUnit.SECONDS);
 
@@ -86,6 +96,19 @@ public final class DemoApplication {
             server.stop();
             System.out.println("[demo] shut down");
         }
+    }
+
+    /**
+     * @return the token from {@value #TOKEN_VARIABLE}, or a fixed demo token (with a warning) if it is not set
+     */
+    static String token() {
+        var token = System.getenv(TOKEN_VARIABLE);
+        if (token == null || token.isBlank()) {
+            LOGGER.warn("{} is not set, using the built-in demo token. Never use a fixed token outside this demo.",
+                    TOKEN_VARIABLE);
+            return FALLBACK_TOKEN;
+        }
+        return token;
     }
 
     private static void awaitTrue(java.util.function.BooleanSupplier condition, String what) throws InterruptedException {

@@ -7,6 +7,7 @@ import de.dataflair.netty5.demo.packets.ChatMessagePacket;
 import de.dataflair.netty5.demo.packets.UserLookupRequest;
 import de.dataflair.netty5.demo.packets.UserLookupResponse;
 import de.dataflair.netty5.filter.ConnectionFilter;
+import de.dataflair.netty5.filter.ConnectionFilters;
 import de.dataflair.netty5.server.Netty5Server;
 import org.jetbrains.annotations.NotNull;
 
@@ -22,6 +23,11 @@ import java.util.concurrent.TimeUnit;
  */
 public final class DemoServer {
     public static final String AUTH_TOKEN_PROPERTY = "token";
+    /**
+     * At most this many rejected names are remembered; a client that is rejected over and over must not grow
+     * the list without bound.
+     */
+    public static final int MAX_REJECTED_CLIENTS = 100;
 
     private final Netty5Server server;
     private final List<String> receivedChat = new CopyOnWriteArrayList<>();
@@ -29,15 +35,21 @@ public final class DemoServer {
     private final CompletableFuture<Netty5ClientChannel> firstAuthenticated = new CompletableFuture<>();
     private final CompletableFuture<Netty5ClientChannel> firstDisconnected = new CompletableFuture<>();
 
-    public DemoServer(@NotNull String host, int port, @NotNull String expectedToken) {
+    /**
+     * @param tokensByName the clients allowed to connect: name and its token. The token is bound to the name, so
+     *                     a token holder cannot log in under another client's name.
+     */
+    public DemoServer(@NotNull String host, int port, @NotNull Map<String, String> tokensByName) {
         // port 0 binds a free port, see port()
         this.server = new Netty5Server(host, port);
         server.serverIdentity(new Netty5ClientChannel.Identity("demo-server", UUID.randomUUID()));
 
         // Everything below must be configured before initialize().
-        // Allowlist mode: only registered classes can be instantiated by a peer. AuthPacket and the JSON packets
-        // are registered by default. Recommended for every server reachable by untrusted peers.
+        // Allowlist mode (the default): only registered classes can be instantiated by a peer. Only AuthPacket
+        // is registered from the start.
         server.packetRegistry(packetRegistry());
+        // The demo stays on loopback without TLS. Across a network set a server SslContext:
+        // server.sslContext(SslContextBuilder.forServer(keyManagerFactory).build());
         // Limits: frames after authentication (default 16 MiB) and before authentication (default 64 KiB).
         server.maxFrameLength(1024 * 1024);
         server.preAuthMaxFrameLength(16 * 1024);
@@ -45,13 +57,21 @@ public final class DemoServer {
         server.authTimeoutMillis(5_000);
 
         // A ConnectionFilter sees the identity and the auth properties of every AuthPacket. Returning false
-        // closes the connection before it is added to connections().
+        // closes the connection before it is added to connections(). Without any ConnectionFilter the server
+        // refuses to start (unless allowAnonymous(true) is set).
+        // The token is looked up by the claimed name and compared in constant time, so a token only works for
+        // the name it was issued for. A second connection with the same name or UUID is rejected by default
+        // (IdentityPolicy.REJECT).
+        var allowed = Map.copyOf(tokensByName);
         server.addFilter(new ConnectionFilter() {
             @Override
             public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
-                var accepted = expectedToken.equals(auth.authProperty().get(AUTH_TOKEN_PROPERTY));
-                if (!accepted) {
-                    rejectedClients.add(auth.clientChannel().identity().name());
+                var name = auth.clientChannel().identity().name();
+                var expected = allowed.get(name);
+                var accepted = expected != null
+                        && ConnectionFilters.tokenEquals(expected, auth.authProperty().get(AUTH_TOKEN_PROPERTY));
+                if (!accepted && rejectedClients.size() < MAX_REJECTED_CLIENTS) {
+                    rejectedClients.add(name);
                 }
                 return accepted;
             }
@@ -87,8 +107,7 @@ public final class DemoServer {
      */
     public static PacketRegistry packetRegistry() {
         return new PacketRegistry()
-                .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class)
-                .restrictToRegistered(true);
+                .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class);
     }
 
     /**
