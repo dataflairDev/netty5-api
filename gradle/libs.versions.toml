@@ -8,6 +8,7 @@ netty = "4.2.19.Final"
 
 #libs
 gson = "2.15.0"
+slf4j = "2.0.17"
 
 # test
 junit = "6.1.3"
@@ -26,11 +27,14 @@ netty-common = { group = "io.netty", name = "netty-common" }
 netty-buffer = { group = "io.netty", name = "netty-buffer" }
 netty-transport = { group = "io.netty", name = "netty-transport" }
 netty-codec-base = { group = "io.netty", name = "netty-codec-base" }
+netty-handler = { group = "io.netty", name = "netty-handler" }
 netty-transport-classes-epoll = { group = "io.netty", name = "netty-transport-classes-epoll" }
 netty-transport-native-epoll = { group = "io.netty", name = "netty-transport-native-epoll" }
 
 #libs
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
+slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
 
 # test
 junit-bom = { group = "org.junit", name = "junit-bom", version.ref = "junit" }
@@ -38,7 +42,7 @@ junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter" }
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher" }
 
 [bundles]
-netty = ["netty-common", "netty-buffer", "netty-transport", "netty-codec-base", "netty-transport-classes-epoll"]
+netty = ["netty-common", "netty-buffer", "netty-transport", "netty-codec-base", "netty-handler", "netty-transport-classes-epoll"]
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

@@ -20,10 +20,14 @@ dependencies {
     // CodecBuffer exposes JsonObject and Netty5ChannelUtils loads Gson statically.
     api(libs.gson)
 
+    // Logging facade; applications choose the binding.
+    api(libs.slf4j.api)
+
     testCompileOnly(libs.jetbrains.annotations)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+    testRuntimeOnly(libs.slf4j.simple)
 }
 
 tasks.test {

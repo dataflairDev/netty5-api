@@ -6,6 +6,7 @@ plugins {
 dependencies {
     compileOnly(libs.jetbrains.annotations)
     implementation(project(":netty5-connection"))
+    runtimeOnly(libs.slf4j.simple)
 
     testCompileOnly(libs.jetbrains.annotations)
     testImplementation(platform(libs.junit.bom))
