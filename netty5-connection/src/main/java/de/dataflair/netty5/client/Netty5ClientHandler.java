@@ -20,11 +20,12 @@ package de.dataflair.netty5.client;
 
 import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.Netty5Component;
+import de.dataflair.netty5.common.codec.PacketRejectedException;
 import de.dataflair.netty5.common.packet.Packet;
 import de.dataflair.netty5.common.packet.auth.AuthPacket;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.TooLongFrameException;
+import io.netty.handler.codec.DecoderException;
 import lombok.AllArgsConstructor;
 
 import java.io.IOException;
@@ -59,7 +60,8 @@ public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packe
             return;
         }
         System.err.println("[client: " + client.identity().name() + "] Exception caught: " + cause);
-        if (cause instanceof TooLongFrameException) {
+        // after a framing error the stream position is lost; a rejected packet is skipped
+        if (cause instanceof DecoderException && !(cause instanceof PacketRejectedException)) {
             ctx.close();
         }
     }

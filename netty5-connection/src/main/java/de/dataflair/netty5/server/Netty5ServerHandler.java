@@ -27,7 +27,7 @@ import de.dataflair.netty5.filter.ConnectionFilter;
 import de.dataflair.netty5.filter.PacketReceiveFilter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.TooLongFrameException;
+import io.netty.handler.codec.DecoderException;
 import io.netty.util.concurrent.ScheduledFuture;
 import org.jetbrains.annotations.NotNull;
 
@@ -131,8 +131,9 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
             return;
         }
         System.err.println(prefix() + "Exception caught: " + cause);
-        if (cause instanceof TooLongFrameException
-                || (cause instanceof PacketRejectedException && this.clientChannel == null)) {
+        // after a framing error the stream position is lost; a rejected packet only closes before authentication
+        if (cause instanceof DecoderException
+                && !(cause instanceof PacketRejectedException && this.clientChannel != null)) {
             ctx.close();
         }
     }

@@ -47,7 +47,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>
  * The {@link #packetTransmitter()} lives as long as the client, so listeners and responders registered on it
  * survive reconnects. {@link #connectionFuture()} is replaced by a new, pending future when the connection is lost
- * and completes when the next connection is established.
+ * and completes when the next connection is established. After {@link #shutdownGracefully(long, long, TimeUnit)}
+ * it is no longer replaced, so it keeps the state of the last connection.
  */
 @Getter
 public final class Netty5Client extends Netty5Component {
@@ -133,7 +134,8 @@ public final class Netty5Client extends Netty5Component {
      */
     void connectionLost() {
         connectionState(ConnectionState.DISCONNECTED);
-        if (connectionFuture().isDone()) {
+        // after shutdown no reconnect follows, so a new future would never complete
+        if (!shuttingDown && connectionFuture().isDone()) {
             connectionFuture(new CommunicationFuture<>());
         }
         scheduleReconnect();
