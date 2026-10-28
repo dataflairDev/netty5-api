@@ -112,7 +112,7 @@ class PacketCodecTest {
     }
 
     /**
-     * Fix 3 and 19: request, respond and query packets keep query id and payload, field initialisers of the
+     * Request, respond and query packets keep query id and payload, field initialisers of the
      * subclass do not overwrite decoded values.
      */
     @Test
@@ -163,7 +163,7 @@ class PacketCodecTest {
     }
 
     /**
-     * Fix 4: unknown and non-packet classes are rejected, the non-packet class is not initialised.
+     * Unknown and non-packet classes are rejected, the non-packet class is not initialised.
      */
     @Test
     void unknownAndNonPacketClassesAreRejectedWithoutInitialisation() {
@@ -183,7 +183,7 @@ class PacketCodecTest {
     }
 
     /**
-     * Fix 4: before authentication only the auth packet is accepted; other classes are not even loaded.
+     * Before authentication only the auth packet is accepted; other classes are not even loaded.
      */
     @Test
     void onlyAuthPacketBeforeAuthentication() {
@@ -204,7 +204,7 @@ class PacketCodecTest {
     }
 
     /**
-     * Fix 4: allowlist mode only accepts registered packets.
+     * Allowlist mode only accepts registered packets.
      */
     @Test
     void restrictedRegistryOnlyAcceptsRegisteredPackets() {
@@ -226,7 +226,7 @@ class PacketCodecTest {
     }
 
     /**
-     * Fix 5: frames larger than maxFrameLength are rejected; default is 16 MiB.
+     * Frames larger than maxFrameLength are rejected; default is 16 MiB.
      */
     @Test
     void tooLargeFrameIsRejected() {
@@ -257,7 +257,7 @@ class PacketCodecTest {
     }
 
     /**
-     * Fix 22: a failing encode writes no partial frame.
+     * A failing encode writes no partial frame.
      */
     @Test
     void failingEncodeWritesNothing() {

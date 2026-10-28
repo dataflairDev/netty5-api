@@ -141,7 +141,7 @@ class CodecBufferTest {
     }
 
     /**
-     * Fix 1: readBuffer returns exactly the nested bytes, not the parent buffer.
+     * {@code readBuffer} returns exactly the nested bytes, not the parent buffer.
      */
     @Test
     void readBufferReturnsSubsequenceOnly() {
@@ -165,7 +165,7 @@ class CodecBufferTest {
     }
 
     /**
-     * Fix 2: the serializer is chosen by the type it handles.
+     * The serializer is chosen by the type it handles.
      */
     @Test
     void serializerIsFoundByHandledType() {

@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Fix 6: with {@link ResourceLeakDetector.Level#PARANOID} every tracked buffer is checked; the codec and a real
+ * With {@link ResourceLeakDetector.Level#PARANOID} every tracked buffer is checked; the codec and a real
  * client-server exchange must not leak. The test runs in its own JVM (forkEvery = 1) so the recording detector
  * factory is installed before Netty creates its leak detectors.
  */

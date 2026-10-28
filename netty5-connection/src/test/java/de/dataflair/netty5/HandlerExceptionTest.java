@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Fix 15: exceptions without a message do not cause a NullPointerException in the handlers.
+ * Exceptions without a message do not cause a NullPointerException in the handlers.
  */
 class HandlerExceptionTest {
 

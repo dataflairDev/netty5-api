@@ -48,7 +48,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 11: concurrent registrations are not lost.
+     * Concurrent registrations are not lost.
      */
     @Test
     void concurrentListenRegistrationsAreKept() throws Exception {
@@ -79,7 +79,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 10: responders are unregistered by their request class.
+     * Responders are unregistered by their request class.
      */
     @Test
     void unregisterResponderUsesRequestClass() {
@@ -97,7 +97,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 21: random listener keys use the alphanumeric alphabet.
+     * Random listener keys use the alphanumeric alphabet.
      */
     @Test
     void generatedKeysAreAlphanumeric() {
@@ -111,7 +111,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 12: a response of the wrong type fails the future instead of being dropped.
+     * A response of the wrong type fails the future instead of being dropped.
      */
     @Test
     void wrongResponseTypeFailsFuture() throws Exception {
@@ -136,7 +136,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 9: blocking requests time out instead of busy waiting forever and clean up.
+     * Blocking requests time out instead of busy waiting forever and clean up.
      */
     @Test
     void directRequestTimesOut() {
@@ -153,7 +153,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 9: many concurrent blocking requests are each answered with their own response.
+     * Many concurrent blocking requests are each answered with their own response.
      */
     @Test
     void concurrentDirectRequests() throws Exception {
@@ -186,7 +186,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 9: a blocking request from the event loop fails immediately.
+     * A blocking request from the event loop fails immediately.
      */
     @Test
     void directRequestOnEventLoopFails() {
@@ -198,7 +198,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 18: the server-wide transmitter rejects queries explicitly.
+     * The server-wide transmitter rejects queries explicitly.
      */
     @Test
     void serverTransmitterQueryIsUnsupported() {

@@ -180,7 +180,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 14: unauthenticated connections are closed after the auth timeout.
+     * Unauthenticated connections are closed after the auth timeout.
      */
     @Test
     void unauthenticatedConnectionIsClosedAfterTimeout() throws Exception {
@@ -193,7 +193,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 4: a packet other than the auth packet before authentication closes the connection.
+     * A packet other than the auth packet before authentication closes the connection.
      */
     @Test
     void packetBeforeAuthenticationClosesConnection() throws Exception {
@@ -208,7 +208,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 14: a connection rejected by a filter is closed and not registered.
+     * A connection rejected by a filter is closed and not registered.
      */
     @Test
     void rejectedConnectionIsClosed() throws Exception {
@@ -228,7 +228,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 14: a second auth packet does not register the channel twice.
+     * A second auth packet does not register the channel twice.
      */
     @Test
     void duplicateAuthenticationIsIgnored() throws Exception {
@@ -248,7 +248,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 13: concurrent connects and disconnects keep the connection list consistent.
+     * Concurrent connects and disconnects keep the connection list consistent.
      */
     @Test
     void concurrentConnectionsAreTracked() throws Exception {
@@ -277,7 +277,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 7: a client started before the server connects once the server is up, without NPE.
+     * A client started before the server connects once the server is up, without NPE.
      */
     @Test
     void clientConnectsWhenServerStartsLater() throws Exception {
@@ -298,7 +298,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 16: the client reconnects after losing the connection; listeners survive the reconnect.
+     * The client reconnects after losing the connection; listeners survive the reconnect.
      */
     @Test
     void reconnectsAfterServerRestart() throws Exception {
@@ -326,7 +326,7 @@ class ClientServerIntegrationTest {
     }
 
     /**
-     * Fix 17: the reconnect scheduler runs on a daemon thread and stops on shutdown.
+     * The reconnect scheduler runs on a daemon thread and stops on shutdown.
      */
     @Test
     void reconnectSchedulerIsDaemonAndStops() throws Exception {
