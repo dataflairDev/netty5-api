@@ -177,15 +177,18 @@ public abstract class Netty5PacketTransmitter {
                                                             @NotNull Class<P> packetClass) {
         var queryId = UUID.randomUUID();
         requestPacket.queryId = queryId;
+        // a received packet still holds its old query id and content; rewrite instead of appending
+        requestPacket.buffer.origin().clear();
         requestPacket.buffer.writeUniqueId(queryId);
         requestPacket.writeBuffer(requestPacket.buffer);
 
         var pending = new CompletableFuture<Packet>();
         pendingRequests.put(queryId, pending);
-        pending.orTimeout(requestTimeoutMillis, TimeUnit.MILLISECONDS)
+        // the entry is removed before the typed stage completes, so callers never observe a stale entry
+        var cleaned = pending.orTimeout(requestTimeoutMillis, TimeUnit.MILLISECONDS)
                 .whenComplete((_, _) -> pendingRequests.remove(queryId, pending));
 
-        var typed = pending.thenApply(response -> {
+        var typed = cleaned.thenApply(response -> {
             if (!packetClass.isInstance(response)) {
                 throw new ClassCastException("Expected " + packetClass.getName() + " but received "
                         + response.getClass().getName());
@@ -267,9 +270,13 @@ public abstract class Netty5PacketTransmitter {
 
     protected static RespondPacket createResponse(@NotNull RequestPacket request,
                                                   @NotNull Function<RequestPacket, RespondPacket> responder) {
+        // read before the responder runs: forwarding the request with queryPacket assigns it a new query id
+        var queryId = request.queryId;
         var respondPacket = responder.apply(request);
-        respondPacket.queryId(request.queryId);
-        respondPacket.buffer.writeUniqueId(request.queryId);
+        respondPacket.queryId(queryId);
+        // the responder may return a received packet that still holds its old query id and content
+        respondPacket.buffer.origin().clear();
+        respondPacket.buffer.writeUniqueId(queryId);
         respondPacket.writeBuffer(respondPacket.buffer);
         return respondPacket;
     }

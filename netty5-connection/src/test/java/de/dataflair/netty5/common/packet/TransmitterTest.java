@@ -1,18 +1,25 @@
 package de.dataflair.netty5.common.packet;
 
+import de.dataflair.netty5.Netty5ChannelInitializer;
 import de.dataflair.netty5.Netty5ChannelUtils;
 import de.dataflair.netty5.client.Netty5ClientPacketTransmitter;
 import de.dataflair.netty5.common.packet.json.JsonRespondPacket;
 import de.dataflair.netty5.server.Netty5ServerPacketTransmitter;
+import de.dataflair.netty5.testpackets.TestPacket;
 import de.dataflair.netty5.testpackets.TestRequestPacket;
 import de.dataflair.netty5.testpackets.TestRespondPacket;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.embedded.EmbeddedChannel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -210,5 +217,124 @@ class TransmitterTest {
         assertThrows(UnsupportedOperationException.class, () -> server.queryPacketDirect(request, TestRespondPacket.class));
         assertThrows(UnsupportedOperationException.class, () -> server.queryPacket(request, TestRespondPacket.class, p -> {
         }));
+    }
+
+    /**
+     * Sends the packet through the real codec and returns what the receiving side decodes.
+     */
+    @SuppressWarnings("unchecked")
+    private static <P extends Packet> P overWire(Packet packet) {
+        var channel = new EmbeddedChannel(new Netty5ChannelInitializer(null) {
+            @Override
+            public SimpleChannelInboundHandler<?> handler() {
+                return new SimpleChannelInboundHandler<Packet>() {
+                    @Override
+                    protected void channelRead0(ChannelHandlerContext ctx, Packet msg) {
+                        ctx.fireChannelRead(msg);
+                    }
+                };
+            }
+        });
+        assertTrue(channel.writeOutbound(packet));
+        ByteBuf out;
+        while ((out = channel.readOutbound()) != null) {
+            channel.writeInbound(out);
+        }
+        P decoded = (P) channel.readInbound();
+        channel.finishAndReleaseAll();
+        return decoded;
+    }
+
+    private static int contentBytes(Packet packet) {
+        return packet.buffer().origin().readableBytes();
+    }
+
+    /**
+     * A received request is forwarded by a middleman responder with queryPacket and the received response is
+     * returned from the responder; both carry only the new query id and their content once.
+     */
+    @Test
+    void middlemanForwardsReceivedRequestAndResponse() throws Exception {
+        var upstreamSent = new LinkedBlockingQueue<Packet>();
+        var upstream = new Netty5ClientPacketTransmitter(group, upstreamSent::add);
+
+        // upstream peer: answers every forwarded request with a response that went over the wire
+        var upstreamPeer = Executors.newSingleThreadExecutor();
+        var forwardedSizes = new LinkedBlockingQueue<Integer>();
+        upstreamPeer.submit(() -> {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    var sentRequest = upstreamSent.take();
+                    forwardedSizes.add(contentBytes(sentRequest));
+                    TestRequestPacket forwarded = overWire(sentRequest);
+                    var response = new TestRespondPacket("answer:" + forwarded.tag() + ":" + forwarded.items());
+                    response.queryId(forwarded.queryId());
+                    response.buffer().writeUniqueId(forwarded.queryId());
+                    response.writeBuffer(response.buffer());
+                    upstream.call(overWire(response), null);
+                }
+            } catch (InterruptedException ignored) {
+            }
+            return null;
+        });
+
+        transmitter.listenQuery(TestRequestPacket.class,
+                request -> upstream.queryPacketDirect(request, TestRespondPacket.class));
+
+        try {
+            var originalId = UUID.randomUUID();
+            var original = new TestRequestPacket("tag", List.of("a", "b"));
+            original.queryId(originalId);
+            original.buffer().writeUniqueId(originalId);
+            original.writeBuffer(original.buffer());
+            var expectedRequestBytes = contentBytes(original);
+            TestRequestPacket received = overWire(original);
+            assertEquals(expectedRequestBytes, contentBytes(received), "decoded buffer is rewound");
+
+            transmitter.call(received, null);
+
+            assertEquals(expectedRequestBytes, forwardedSizes.poll(5, TimeUnit.SECONDS),
+                    "forwarded request must contain one query id and the content once");
+            var answer = sent.poll(5, TimeUnit.SECONDS);
+            assertNotNull(answer);
+            var expectedAnswer = new TestRespondPacket("answer:tag:[a, b]");
+            expectedAnswer.buffer().writeUniqueId(originalId);
+            expectedAnswer.writeBuffer(expectedAnswer.buffer());
+            assertEquals(contentBytes(expectedAnswer), contentBytes(answer),
+                    "returned response must contain one query id and the content once");
+
+            TestRespondPacket decodedAnswer = overWire(answer);
+            assertEquals(originalId, decodedAnswer.queryId());
+            assertEquals("answer:tag:[a, b]", decodedAnswer.value());
+            assertTrue(upstream.pendingRequests().isEmpty());
+        } finally {
+            upstreamPeer.shutdownNow();
+        }
+    }
+
+    /**
+     * publishPacket forwards a received packet with its complete content.
+     */
+    @Test
+    void publishingReceivedPacketKeepsContent() throws Exception {
+        TestPacket received = overWire(new TestPacket("forward", 5));
+        transmitter.publishPacket(received);
+        var published = sent.poll(5, TimeUnit.SECONDS);
+        assertSame(received, published);
+        TestPacket again = overWire(published);
+        assertEquals("forward", again.message());
+        assertEquals(5, again.number());
+
+        var queryId = UUID.randomUUID();
+        var request = new TestRequestPacket("r", List.of("x"));
+        request.queryId(queryId);
+        request.buffer().writeUniqueId(queryId);
+        request.writeBuffer(request.buffer());
+        TestRequestPacket receivedRequest = overWire(request);
+        transmitter.publishPacket(receivedRequest);
+        TestRequestPacket forwardedRequest = overWire(sent.poll(5, TimeUnit.SECONDS));
+        assertEquals(queryId, forwardedRequest.queryId());
+        assertEquals("r", forwardedRequest.tag());
+        assertEquals(List.of("x"), forwardedRequest.items());
     }
 }
