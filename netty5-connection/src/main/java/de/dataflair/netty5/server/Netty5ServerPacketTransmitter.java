@@ -87,10 +87,13 @@ public final class Netty5ServerPacketTransmitter extends Netty5PacketTransmitter
     public void call(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
         if (packet instanceof RespondPacket respondPacket) {
             // responses to requests sent through a client channel's transmitter
-            if (sender != null && sender.transmitter() != null) {
-                sender.transmitter().completeRequest(respondPacket);
+            var completed = sender != null && sender.transmitter() != null
+                    && sender.transmitter().completeRequest(respondPacket);
+            completed |= this.completeRequest(respondPacket);
+            if (!completed) {
+                // unsolicited response: never passed to listeners
+                return;
             }
-            this.completeRequest(respondPacket);
         }
 
         if (packet instanceof RequestPacket requestPacket) {

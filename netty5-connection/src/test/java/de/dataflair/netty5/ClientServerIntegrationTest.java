@@ -5,6 +5,7 @@ import de.dataflair.netty5.client.Netty5Client;
 import de.dataflair.netty5.common.packet.auth.AuthPacket;
 import de.dataflair.netty5.common.packet.json.JsonPacket;
 import de.dataflair.netty5.filter.ConnectionFilter;
+import de.dataflair.netty5.common.codec.PacketRegistry;
 import de.dataflair.netty5.server.Netty5Server;
 import de.dataflair.netty5.testpackets.TestPacket;
 import de.dataflair.netty5.testpackets.TestRequestPacket;
@@ -59,6 +60,9 @@ class ClientServerIntegrationTest {
         Exception last = null;
         for (int attempt = 0; attempt < 20; attempt++) {
             var server = new Netty5Server("127.0.0.1", port);
+            // these tests are about transport and dispatch: no filter, open registry unless a test configures one
+            server.allowAnonymous(true);
+            server.packetRegistry(new PacketRegistry().allowAnyPacketClass());
             config.accept(server);
             server.initialize();
             components.add(server);
@@ -81,6 +85,7 @@ class ClientServerIntegrationTest {
         var client = new Netty5Client("127.0.0.1", port, new Netty5ClientChannel.Identity(name, UUID.randomUUID()),
                 Map.of("token", "t"));
         client.reconnectDelayMillis(100);
+        client.packetRegistry(new PacketRegistry().allowAnyPacketClass());
         components.add(client);
         return client;
     }

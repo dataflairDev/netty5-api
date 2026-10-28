@@ -24,10 +24,14 @@ import de.dataflair.netty5.common.codec.PacketRegistry;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import de.dataflair.netty5.common.codec.Netty5FrameDecoder;
+import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.ssl.SslHandler;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.function.Function;
 
 public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channel> {
     private final Netty5ClientChannel.Identity identity;
@@ -35,6 +39,9 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
     private final int preAuthMaxFrameLength;
     private final PacketRegistry packetRegistry;
     private final boolean requireAuthentication;
+    private @Nullable ChannelHandler firstHandler;
+    private @Nullable Function<Channel, SslHandler> sslHandlerFactory;
+    private long maxOutboundBufferBytes = Netty5Component.DEFAULT_MAX_OUTBOUND_BUFFER_BYTES;
 
     public Netty5ChannelInitializer(Netty5ClientChannel.Identity identity) {
         this(identity, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, null, false);
@@ -80,14 +87,51 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
         this.requireAuthentication = requireAuthentication;
     }
 
+    /**
+     * @param handler a (sharable) handler placed in front of every other handler, for example a connection
+     *                limiter; null for none
+     */
+    public Netty5ChannelInitializer firstHandler(@Nullable ChannelHandler handler) {
+        this.firstHandler = handler;
+        return this;
+    }
+
+    /**
+     * @param factory creates the {@link SslHandler} of a channel; null for plain TCP
+     */
+    public Netty5ChannelInitializer sslHandlerFactory(@Nullable Function<Channel, SslHandler> factory) {
+        this.sslHandlerFactory = factory;
+        return this;
+    }
+
+    /**
+     * @param bytes hard limit of the outbound buffer, see {@link BackpressureHandler}
+     */
+    public Netty5ChannelInitializer maxOutboundBufferBytes(long bytes) {
+        if (bytes <= 0) {
+            throw new IllegalArgumentException("maxOutboundBufferBytes must be positive: " + bytes);
+        }
+        this.maxOutboundBufferBytes = bytes;
+        return this;
+    }
+
     @Override
     protected void initChannel(@NotNull Channel channel) {
-        channel.pipeline()
-                .addLast(new LengthFieldBasedFrameDecoder(maxFrameLength, 0, Integer.BYTES, 0, Integer.BYTES))
-                .addLast(new PacketDecoder(identity, packetRegistry, requireAuthentication, preAuthMaxFrameLength))
-                .addLast(new LengthFieldPrepender(Integer.BYTES))
-                .addLast(new PacketEncoder(identity, maxFrameLength))
-                .addLast(handler());
+        var pipeline = channel.pipeline();
+        if (firstHandler != null) {
+            pipeline.addLast("connection-limit", firstHandler);
+        }
+        if (sslHandlerFactory != null) {
+            pipeline.addLast("ssl", sslHandlerFactory.apply(channel));
+        }
+        pipeline.addLast("backpressure", new BackpressureHandler(maxOutboundBufferBytes))
+                .addLast("frame-decoder", new Netty5FrameDecoder(maxFrameLength, preAuthMaxFrameLength,
+                        requireAuthentication))
+                .addLast("packet-decoder", new PacketDecoder(identity, packetRegistry, requireAuthentication,
+                        preAuthMaxFrameLength))
+                .addLast("frame-prepender", new LengthFieldPrepender(Integer.BYTES))
+                .addLast("packet-encoder", new PacketEncoder(identity, maxFrameLength))
+                .addLast("handler", handler());
     }
 
     public abstract SimpleChannelInboundHandler<?> handler();

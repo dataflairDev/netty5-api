@@ -24,7 +24,8 @@ class HandlerExceptionTest {
             var channel = new EmbeddedChannel(new Netty5ServerHandler(server));
             channel.pipeline().fireExceptionCaught(new RuntimeException());
             assertDoesNotThrow(channel::checkException);
-            assertTrue(channel.isOpen());
+            // fail-closed: an unexpected exception before authentication closes the connection
+            assertFalse(channel.isOpen());
             channel.finishAndReleaseAll();
         } finally {
             server.shutdownGracefully(0, 1, TimeUnit.SECONDS).await(5, TimeUnit.SECONDS);

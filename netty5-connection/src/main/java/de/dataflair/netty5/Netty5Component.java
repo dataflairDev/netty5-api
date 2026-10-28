@@ -22,11 +22,17 @@ import de.dataflair.netty5.actions.Action;
 import de.dataflair.netty5.common.codec.PacketRegistry;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.WriteBufferWaterMark;
+import io.netty.handler.ssl.SslContext;
+import de.dataflair.netty5.common.log.SafeLog;
 import io.netty.util.concurrent.Future;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -35,6 +41,21 @@ import java.util.concurrent.TimeUnit;
 
 @Getter
 public abstract class Netty5Component {
+    /**
+     * Default TLS handshake timeout in milliseconds.
+     */
+    public static final long DEFAULT_HANDSHAKE_TIMEOUT_MILLIS = 10_000;
+    /**
+     * Default write buffer water marks: low 32 KiB, high 64 KiB.
+     */
+    public static final WriteBufferWaterMark DEFAULT_WRITE_BUFFER_WATER_MARK =
+            new WriteBufferWaterMark(32 * 1024, 64 * 1024);
+    /**
+     * Default hard limit of the outbound buffer per channel (8 MiB).
+     */
+    public static final long DEFAULT_MAX_OUTBOUND_BUFFER_BYTES = 8L * 1024 * 1024;
+    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Component.class);
+
     @Setter(AccessLevel.PROTECTED)
     private volatile CommunicationFuture<Void> connectionFuture = new CommunicationFuture<>();
     @Getter
@@ -63,6 +84,32 @@ public abstract class Netty5Component {
      */
     @Setter
     private volatile @NotNull PacketRegistry packetRegistry = new PacketRegistry();
+    /**
+     * TLS context, null for plain TCP (default). A server needs a server context, a client a client context.
+     * The {@code SslHandler} is the first handler that sees the bytes of a connection. Must be set before
+     * {@link #initialize()}.
+     */
+    @Setter
+    private volatile @Nullable SslContext sslContext;
+    /**
+     * Maximum time in milliseconds for the TLS handshake, default 10 s. The server uses at most its
+     * authentication timeout. Must be set before {@link #initialize()}.
+     */
+    @Setter
+    private volatile long handshakeTimeoutMillis = DEFAULT_HANDSHAKE_TIMEOUT_MILLIS;
+    /**
+     * Write buffer water marks in bytes (default 32 KiB / 64 KiB). Above the high water mark a channel is
+     * unwritable and stops reading until it drops below the low water mark again. Must be set before
+     * {@link #initialize()}.
+     */
+    @Setter
+    private volatile @NotNull WriteBufferWaterMark writeBufferWaterMark = DEFAULT_WRITE_BUFFER_WATER_MARK;
+    /**
+     * Hard limit in bytes for the outbound buffer of one channel, default 8 MiB. A channel whose pending writes
+     * exceed it is closed. Must be set before {@link #initialize()}.
+     */
+    @Setter
+    private volatile long maxOutboundBufferBytes = DEFAULT_MAX_OUTBOUND_BUFFER_BYTES;
 
     public Netty5Component(int bossGroupThreads, @NotNull String hostname, int port) {
         this.bossGroup = Netty5ChannelUtils.createEventLoopGroup(bossGroupThreads);
@@ -114,7 +161,7 @@ public abstract class Netty5Component {
     public static final class CommunicationFuture<E> extends CompletableFuture<E> {
         public CommunicationFuture() {
             this.exceptionally(throwable -> {
-                throwable.printStackTrace();
+                LOGGER.warn("Communication future failed: {}", SafeLog.clean(throwable));
                 return null;
             });
         }

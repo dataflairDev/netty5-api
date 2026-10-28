@@ -32,6 +32,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -49,10 +51,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * survive reconnects. {@link #connectionFuture()} is replaced by a new, pending future when the connection is lost
  * and completes when the next connection is established. After {@link #shutdownGracefully(long, long, TimeUnit)}
  * it is no longer replaced, so it keeps the state of the last connection.
+ * <p>
+ * With an {@link #sslContext()} the {@code AuthPacket} is only sent after the TLS handshake has succeeded, and the
+ * server certificate must match the host name ({@code endpointIdentificationAlgorithm=HTTPS}).
  */
 @Getter
 public final class Netty5Client extends Netty5Component {
     private static final AtomicInteger RECONNECT_THREAD_ID = new AtomicInteger();
+    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Client.class);
 
     private final Netty5ClientChannel.Identity identity;
     private final Map<String, String> authProperty;
@@ -88,6 +94,9 @@ public final class Netty5Client extends Netty5Component {
         });
     }
 
+    /**
+     * @throws IllegalArgumentException if the configured {@link #sslContext()} is not a client context
+     */
     @Override
     public void initialize() throws Exception {
         var initializer = new Netty5ChannelInitializer(this.identity, maxFrameLength(), packetRegistry(), false) {
@@ -96,6 +105,24 @@ public final class Netty5Client extends Netty5Component {
                 return new Netty5ClientHandler(Netty5Client.this);
             }
         };
+        initializer.maxOutboundBufferBytes(maxOutboundBufferBytes());
+        var ssl = sslContext();
+        if (ssl != null) {
+            if (!ssl.isClient()) {
+                throw new IllegalArgumentException("The client needs a client SslContext");
+            }
+            var handshakeTimeout = handshakeTimeoutMillis();
+            initializer.sslHandlerFactory(channel -> {
+                var handler = ssl.newHandler(channel.alloc(), hostname(), port());
+                var engine = handler.engine();
+                var parameters = engine.getSSLParameters();
+                // verify that the certificate belongs to the host we connect to
+                parameters.setEndpointIdentificationAlgorithm("HTTPS");
+                engine.setSSLParameters(parameters);
+                handler.setHandshakeTimeoutMillis(handshakeTimeout);
+                return handler;
+            });
+        }
         bootstrap = new Bootstrap()
                 .group(bossGroup())
                 .channelFactory(Netty5ChannelUtils.createChannelFactory())
@@ -103,7 +130,8 @@ public final class Netty5Client extends Netty5Component {
                 .option(ChannelOption.AUTO_READ, true)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.IP_TOS, 24)
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000);
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000)
+                .option(ChannelOption.WRITE_BUFFER_WATER_MARK, writeBufferWaterMark());
 
         if (Epoll.isAvailable() && Epoll.isTcpFastOpenClientSideAvailable()) {
             bootstrap.option(ChannelOption.TCP_FASTOPEN_CONNECT, true);
@@ -149,7 +177,7 @@ public final class Netty5Client extends Netty5Component {
             reconnectScheduler.schedule(() -> {
                 if (this.connectionState() == ConnectionState.DISCONNECTED ||
                         this.connectionState() == ConnectionState.SEASON_CLOSED) {
-                    System.out.println("[client: " + identity.name() + "] Attempting to reconnect...");
+                    LOGGER.info("[client: {}] Attempting to reconnect", identity.name());
                     connect();
                 }
             }, reconnectDelayMillis, TimeUnit.MILLISECONDS);
