@@ -3,10 +3,8 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.utility.lombok)
-    implementation(libs.jetbrains.annotations)
-    implementation(libs.netty5.all)
-    implementation(libs.gson)
-    implementation(project(":netty5-connection"))
+    compileOnly(libs.utility.lombok)
+    compileOnly(libs.jetbrains.annotations)
     annotationProcessor(libs.utility.lombok)
+    implementation(project(":netty5-connection"))
 }

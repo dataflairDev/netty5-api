@@ -2,41 +2,33 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     id("java")
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    alias(libs.plugins.shadow)
 }
 
 allprojects {
     apply(plugin = "java-library")
     apply(plugin = "maven-publish")
-    apply(plugin = "com.github.johnrengelman.shadow")
+    apply(plugin = "com.gradleup.shadow")
 
     group = "de.dataflair.netty5-api"
-    version = "1.0.22"
+    version = "2.0.0"
 
     repositories {
-        maven {
-            name = "dataflair-public-release"
-            url = uri("https://rp1.dataflair.cloud/repository/dataflair-public-release/")
-            credentials {
-                username = project.findProperty("dataflair_rp1_admin_username") as String?
-                password = project.findProperty("dataflair_rp1_admin_password") as String?
-            }
-        }
         mavenCentral()
     }
 
+    extensions.configure<JavaPluginExtension> {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(27))
+        }
+    }
+
     tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = JavaVersion.VERSION_22.toString()
-        targetCompatibility = JavaVersion.VERSION_22.toString()
+        options.release.set(27)
         options.encoding = "UTF-8"
     }
 
-    tasks.register<Jar>("sourcesJar") {
-        from(sourceSets.main.get().allJava)
-        archiveClassifier.set("sources")
-    }
-
-    tasks.jar {
+    tasks.withType<Jar>().configureEach {
         manifest {
             attributes(
                 "Implementation-Version" to project.version
@@ -46,10 +38,5 @@ allprojects {
 
     tasks.named<ShadowJar>("shadowJar") {
         mergeServiceFiles()
-        manifest {
-            attributes(
-                "Implementation-Version" to project.version
-            )
-        }
     }
 }

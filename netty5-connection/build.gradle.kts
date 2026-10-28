@@ -2,12 +2,39 @@ plugins {
     id("java")
 }
 
+java {
+    withSourcesJar()
+}
+
 dependencies {
     compileOnly(libs.utility.lombok)
     compileOnly(libs.jetbrains.annotations)
-    compileOnly(libs.gson)
-    implementation(libs.netty5.all)
     annotationProcessor(libs.utility.lombok)
+
+    // Netty types (Channel, EventLoopGroup, ByteBuf) are part of the public API.
+    api(platform(libs.netty.bom))
+    api(libs.bundles.netty)
+    runtimeOnly(variantOf(libs.netty.transport.native.epoll) { classifier("linux-x86_64") })
+    runtimeOnly(variantOf(libs.netty.transport.native.epoll) { classifier("linux-aarch_64") })
+
+    // CodecBuffer exposes JsonObject and Netty5ChannelUtils loads Gson statically.
+    api(libs.gson)
+
+    testCompileOnly(libs.jetbrains.annotations)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+    useJUnitPlatform()
+    // every test class gets a fresh JVM so the leak test can install its detector before Netty initialises
+    forkEvery = 1
+    systemProperty("io.netty.leakDetection.level", "paranoid")
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
 }
 
 publishing {
@@ -29,10 +56,6 @@ publishing {
 
     publications {
         create<MavenPublication>("dataflair-public") {
-            groupId = groupId
-            artifactId = artifactId
-            version = version
-
             from(components["java"])
         }
     }
