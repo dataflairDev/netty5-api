@@ -23,7 +23,10 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.util.concurrent.EventExecutor;
 import lombok.Getter;
 import lombok.Setter;
+import de.dataflair.netty5.common.log.SafeLog;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.jetbrains.annotations.Nullable;
 
 import java.security.SecureRandom;
@@ -46,6 +49,7 @@ import java.util.function.Function;
  */
 @Getter
 public abstract class Netty5PacketTransmitter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5PacketTransmitter.class);
     /**
      * Default timeout for requests in milliseconds.
      */
@@ -128,7 +132,7 @@ public abstract class Netty5PacketTransmitter {
                                                @NotNull Consumer<P> callback) {
         this.query(requestPacket, packetClass).whenComplete((response, throwable) -> {
             if (throwable != null) {
-                System.err.println("Request " + requestPacket.getClass().getName() + " failed: " + throwable);
+                LOGGER.warn("Request {} failed: {}", requestPacket.getClass().getName(), SafeLog.clean(throwable));
                 return;
             }
             callback.accept(response);
@@ -232,9 +236,14 @@ public abstract class Netty5PacketTransmitter {
 
     public abstract void callActions(@NotNull Packet packet, Netty5ClientChannel sender);
 
+    /**
+     * Dispatches a received packet. A {@link RespondPacket} that does not answer a pending request of this
+     * transmitter is dropped; it never reaches the listeners.
+     */
     public void call(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
-        if (packet instanceof RespondPacket respondPacket) {
-            this.completeRequest(respondPacket);
+        if (packet instanceof RespondPacket respondPacket && !this.completeRequest(respondPacket)) {
+            LOGGER.debug("Unsolicited response {} dropped", packet.getClass().getName());
+            return;
         }
 
         if (packet instanceof RequestPacket requestPacket) {

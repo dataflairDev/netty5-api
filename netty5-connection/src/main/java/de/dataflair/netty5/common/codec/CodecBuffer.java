@@ -3,10 +3,13 @@ package de.dataflair.netty5.common.codec;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import de.dataflair.netty5.Netty5ChannelUtils;
+import de.dataflair.netty5.common.log.SafeLog;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -25,6 +28,11 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      * pooled and are released by the codec, see {@link PacketDecoder}.
      */
     private static final int INITIAL_CAPACITY = 64;
+    private static final Logger LOGGER = LoggerFactory.getLogger(CodecBuffer.class);
+    /**
+     * Default maximum length in bytes of a JSON document read by {@link #readJsonObject()} (1 MiB).
+     */
+    public static final int DEFAULT_MAX_JSON_LENGTH = 1024 * 1024;
 
     /**
      * A list of BufferSerializer objects used for serialization and deserialization.
@@ -74,7 +82,7 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      */
     public void resetBuffer() {
         if (origin.readableBytes() > 0) {
-            System.err.println("Buffer not empty! Skipping remaining bytes: " + origin.readableBytes());
+            LOGGER.warn("Buffer not empty, skipping remaining {} bytes", origin.readableBytes());
             origin.skipBytes(origin.readableBytes());
         }
     }
@@ -98,7 +106,20 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      * @return The String read from the ProtocolBuffer.
      */
     public String readString() {
+        return readString(Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads a String of at most {@code maxLength} bytes (UTF-8).
+     *
+     * @throws IllegalArgumentException  if the announced length exceeds {@code maxLength}
+     * @throws IndexOutOfBoundsException if the announced length is negative or exceeds the readable bytes
+     */
+    public String readString(int maxLength) {
         var length = this.origin.readInt();
+        if (length > maxLength && length >= 0) {
+            throw new IllegalArgumentException("String length " + length + " exceeds " + maxLength);
+        }
         if (length < 0 || length > this.origin.readableBytes()) {
             throw new IndexOutOfBoundsException("Invalid string length " + length + " (readable: " + this.origin.readableBytes() + ")");
         }
@@ -182,10 +203,16 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      *
      * @param clazz The Class representing the Enum from which to read the value.
      * @return The Enum value read from the specified Class.
-     * @throws NullPointerException if clazz is null.
+     * @throws NullPointerException     if clazz is null.
+     * @throws IllegalArgumentException if the ordinal is not a constant of the enum
      */
     public <T extends Enum<?>> T readEnum(@NotNull Class<T> clazz) {
-        return clazz.getEnumConstants()[this.origin.readInt()];
+        var constants = clazz.getEnumConstants();
+        var ordinal = this.origin.readInt();
+        if (ordinal < 0 || ordinal >= constants.length) {
+            throw new IllegalArgumentException("Invalid ordinal " + ordinal + " for " + clazz.getName());
+        }
+        return constants[ordinal];
     }
 
     /**
@@ -426,11 +453,48 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      * @return the same list with the newly read elements added to it
      */
     public <T> List<T> readList(@NotNull List<T> list, @NotNull Supplier<T> supplier) {
-        var size = this.readInt();
+        return readList(list, supplier, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads a list of at most {@code maxSize} elements.
+     * <p>
+     * The announced size is checked before anything is read: it must not be negative, not exceed
+     * {@code maxSize} and not exceed the readable bytes (every element takes at least one byte). Reading stops
+     * with an exception if an element does not consume any byte.
+     *
+     * @throws IllegalArgumentException if the announced size is invalid or an element made no progress
+     */
+    public <T> List<T> readList(@NotNull List<T> list, @NotNull Supplier<T> supplier, int maxSize) {
+        var size = readSize(maxSize);
         for (var i = 0; i < size; i++) {
+            var before = this.origin.readerIndex();
             list.add(supplier.get());
+            requireProgress(before);
         }
         return list;
+    }
+
+    private int readSize(int maxSize) {
+        var size = this.readInt();
+        if (size < 0) {
+            throw new IllegalArgumentException("Negative size " + size);
+        }
+        if (size > maxSize) {
+            throw new IllegalArgumentException("Size " + size + " exceeds " + maxSize);
+        }
+        if (size > this.origin.readableBytes()) {
+            throw new IllegalArgumentException("Size " + size + " exceeds the readable bytes ("
+                    + this.origin.readableBytes() + ")");
+        }
+        return size;
+    }
+
+    private void requireProgress(int readerIndexBefore) {
+        if (this.origin.readerIndex() == readerIndexBefore) {
+            throw new IllegalArgumentException("Element at reader index " + readerIndexBefore
+                    + " did not consume any byte");
+        }
     }
 
     /**
@@ -588,9 +652,29 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
             @NotNull Supplier<K> keySupplier,
             @NotNull Supplier<V> valueSupplier
     ) {
-        var size = this.readInt();
+        return readMap(map, keySupplier, valueSupplier, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads a map of at most {@code maxSize} entries. The size is validated like in
+     * {@link #readList(List, Supplier, int)}; reading stops with an exception if an entry does not consume any
+     * byte.
+     *
+     * @throws IllegalArgumentException if the announced size is invalid or an entry made no progress
+     */
+    public <K, V> Map<K, V> readMap(
+            @NotNull Map<K, V> map,
+            @NotNull Supplier<K> keySupplier,
+            @NotNull Supplier<V> valueSupplier,
+            int maxSize
+    ) {
+        var size = readSize(maxSize);
         for (int i = 0; i < size; i++) {
-            map.put(keySupplier.get(), valueSupplier.get());
+            var before = this.origin.readerIndex();
+            var key = keySupplier.get();
+            var value = valueSupplier.get();
+            requireProgress(before);
+            map.put(key, value);
         }
         return map;
     }
@@ -631,12 +715,21 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
     }
 
     /**
-     * Reads a JsonObject from the buffer.
+     * Reads a JsonObject of at most {@link #DEFAULT_MAX_JSON_LENGTH} bytes from the buffer.
      *
      * @return The JsonObject read from the buffer
      */
     public JsonObject readJsonObject() {
-        return Netty5ChannelUtils.JSON.fromJson(this.readString(), JsonObject.class);
+        return readJsonObject(DEFAULT_MAX_JSON_LENGTH);
+    }
+
+    /**
+     * Reads a JsonObject of at most {@code maxLength} bytes.
+     *
+     * @throws IllegalArgumentException if the document is longer than {@code maxLength}
+     */
+    public JsonObject readJsonObject(int maxLength) {
+        return Netty5ChannelUtils.JSON.fromJson(this.readString(maxLength), JsonObject.class);
     }
 
     /**
@@ -650,15 +743,14 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
     public <T> CodecBuffer writeWithSerializer(@NotNull T object, @NotNull Class<T> clazz) {
         BufferSerializer<T> serializer = findSerializer(clazz);
         if (serializer == null) {
-            System.err.println("No serializer found for class: " + clazz.getName());
+            LOGGER.warn("No serializer found for class {}", clazz.getName());
             return this;
         }
 
         try {
             serializer.writeInBuffer(object, this);
         } catch (Exception e) {
-            System.err.println("Error when writing the object for class: " + clazz.getName());
-            e.printStackTrace(System.err);
+            LOGGER.warn("Error when writing an object of class {}", clazz.getName(), e);
         }
         return this;
     }
@@ -673,15 +765,14 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
     public <T> T readBySerializer(@NotNull Class<T> clazz) {
         BufferSerializer<T> serializer = findSerializer(clazz);
         if (serializer == null) {
-            System.err.println("No serializer found for class: " + clazz.getName());
+            LOGGER.warn("No serializer found for class {}", clazz.getName());
             return null;
         }
 
         try {
             return serializer.readFromBuffer(this);
         } catch (Exception e) {
-            System.err.println("Error when reading the object for class: " + clazz.getName());
-            e.printStackTrace(System.err);
+            LOGGER.warn("Error when reading an object of class {}: {}", clazz.getName(), SafeLog.clean(e));
             return null;
         }
     }

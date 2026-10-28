@@ -23,6 +23,10 @@ public class PacketFactory {
             if (e.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
+            if (e.getCause() instanceof Error error) {
+                // StackOverflowError, LinkageError, ...: the decoder closes the channel
+                throw error;
+            }
             throw e;
         }
         packet.readContent(buffer);

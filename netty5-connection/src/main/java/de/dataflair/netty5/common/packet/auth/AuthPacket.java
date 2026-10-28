@@ -52,12 +52,6 @@ public class AuthPacket extends Packet {
     public AuthPacket(@NotNull CodecBuffer buffer) {
         super(buffer);
         this.identity = buffer.readStream(new Netty5ClientChannel.Identity());
-        var origin = buffer.origin();
-        var size = origin.readableBytes() >= Integer.BYTES ? origin.getInt(origin.readerIndex()) : 0;
-        if (size < 0 || size > MAX_PROPERTIES) {
-            throw new IllegalArgumentException("Invalid number of auth properties: " + size
-                    + " (max " + MAX_PROPERTIES + ")");
-        }
-        this.properties = buffer.readMap(new HashMap<>(), buffer::readString, buffer::readString);
+        this.properties = buffer.readMap(new HashMap<>(), buffer::readString, buffer::readString, MAX_PROPERTIES);
     }
 }

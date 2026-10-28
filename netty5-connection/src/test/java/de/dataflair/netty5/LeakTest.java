@@ -79,7 +79,7 @@ class LeakTest {
     }
 
     private static EmbeddedChannel codecChannel(boolean requireAuthentication) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, 1024, new PacketRegistry(), requireAuthentication) {
+        return new EmbeddedChannel(new Netty5ChannelInitializer(null, 1024, new PacketRegistry().allowAnyPacketClass(), requireAuthentication) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new SimpleChannelInboundHandler<Packet>() {
@@ -144,10 +144,13 @@ class LeakTest {
 
     private static void networkWorkload() throws Exception {
         var server = new Netty5Server("127.0.0.1", 0);
+        server.allowAnonymous(true);
+        server.packetRegistry(new PacketRegistry().allowAnyPacketClass());
         server.initialize();
         server.connectionFuture().get(5, TimeUnit.SECONDS);
         var client = new Netty5Client("127.0.0.1", server.localAddress().getPort(),
                 new Netty5ClientChannel.Identity("leak", UUID.randomUUID()), Map.of());
+        client.packetRegistry(new PacketRegistry().allowAnyPacketClass());
         try {
             server.packetTransmitter().listen(TestPacket.class, (sender, packet) -> sender.sendPacket(packet));
             server.packetTransmitter().listenQuery(TestRequestPacket.class, r -> new TestRespondPacket(r.tag()));

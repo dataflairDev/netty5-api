@@ -224,7 +224,8 @@ class TransmitterTest {
      */
     @SuppressWarnings("unchecked")
     private static <P extends Packet> P overWire(Packet packet) {
-        var channel = new EmbeddedChannel(new Netty5ChannelInitializer(null) {
+        var channel = new EmbeddedChannel(new Netty5ChannelInitializer(null, de.dataflair.netty5.Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
+                new de.dataflair.netty5.common.codec.PacketRegistry().allowAnyPacketClass(), false) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new SimpleChannelInboundHandler<Packet>() {

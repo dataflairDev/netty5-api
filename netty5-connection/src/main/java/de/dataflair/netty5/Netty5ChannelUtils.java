@@ -20,6 +20,7 @@ package de.dataflair.netty5;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFactory;
 import io.netty.channel.IoHandlerFactory;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -60,6 +61,56 @@ public class Netty5ChannelUtils {
      * The {@link de.dataflair.netty5.common.codec.PacketDecoder} only accepts the auth packet until it is set.
      */
     public final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("netty5-api.authenticated");
+
+    /**
+     * Set on a server side child channel while an {@link de.dataflair.netty5.filter.AsyncConnectionFilter} is
+     * evaluating its auth packet. No further frame is decoded until it is cleared.
+     */
+    public final AttributeKey<Boolean> AUTH_PENDING = AttributeKey.valueOf("netty5-api.auth-pending");
+
+    /**
+     * Reason for {@link #suspendRead(Channel, int)}: the outbound buffer is above the high water mark.
+     */
+    public final int READ_SUSPENDED_BACKPRESSURE = 1;
+    /**
+     * Reason for {@link #suspendRead(Channel, int)}: an asynchronous connection filter is running.
+     */
+    public final int READ_SUSPENDED_AUTHENTICATION = 2;
+
+    private final AttributeKey<Integer> READ_SUSPENSION = AttributeKey.valueOf("netty5-api.read-suspension");
+
+    /**
+     * Stops reading from the channel ({@code autoRead=false}) for the given reason. Reading resumes when every
+     * reason has been cleared with {@link #resumeRead(Channel, int)}. Must be called on the channel's event loop.
+     */
+    public static void suspendRead(@NotNull Channel channel, int reason) {
+        var attribute = channel.attr(READ_SUSPENSION);
+        var current = attribute.get();
+        attribute.set((current == null ? 0 : current) | reason);
+        channel.config().setAutoRead(false);
+    }
+
+    /**
+     * Clears a reason set with {@link #suspendRead(Channel, int)}; turns {@code autoRead} back on if no reason
+     * is left. Must be called on the channel's event loop.
+     */
+    public static void resumeRead(@NotNull Channel channel, int reason) {
+        var attribute = channel.attr(READ_SUSPENSION);
+        var current = attribute.get();
+        var remaining = (current == null ? 0 : current) & ~reason;
+        attribute.set(remaining);
+        if (remaining == 0) {
+            channel.config().setAutoRead(true);
+        }
+    }
+
+    public static boolean isAuthenticated(@NotNull Channel channel) {
+        return Boolean.TRUE.equals(channel.attr(AUTHENTICATED).get());
+    }
+
+    public static boolean isAuthPending(@NotNull Channel channel) {
+        return Boolean.TRUE.equals(channel.attr(AUTH_PENDING).get());
+    }
 
     public static @NotNull MultiThreadIoEventLoopGroup createEventLoopGroup(int threads) {
         return new MultiThreadIoEventLoopGroup(threads, ioHandlerFactory());

@@ -28,7 +28,7 @@ class HandlerCloseTest {
 
     private static EmbeddedChannel serverChannel(Netty5Server server) {
         return new EmbeddedChannel(new Netty5ChannelInitializer(null, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
-                Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, new PacketRegistry(), true) {
+                Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new Netty5ServerHandler(server);
@@ -38,7 +38,7 @@ class HandlerCloseTest {
 
     private static EmbeddedChannel clientChannel(Netty5Client client) {
         return new EmbeddedChannel(new Netty5ChannelInitializer(null, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
-                new PacketRegistry(), false) {
+                new PacketRegistry().allowAnyPacketClass(), false) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new Netty5ClientHandler(client);

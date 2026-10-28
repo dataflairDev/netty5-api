@@ -16,24 +16,23 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * The registry has two modes:
  * <ul>
- *     <li><b>Open mode (default).</b> Every class visible to the configured class loader is accepted if it is a
- *     public, concrete (neither abstract nor an interface) {@link Packet} subclass with a public
- *     {@code (CodecBuffer)} constructor. The class is loaded <b>without initialisation</b>; its static
+ *     <li><b>Allowlist mode (default).</b> Only classes passed to {@link #register(Class[])} are accepted, every
+ *     other name is rejected without loading a class. Only {@link AuthPacket} is registered from the start; the
+ *     built-in JSON packets ({@link JsonPacket}, {@link JsonRequestPacket}, {@link JsonRespondPacket}) must be
+ *     registered like any other packet if they are used.</li>
+ *     <li><b>Open mode</b> ({@link #allowAnyPacketClass()}). Every class visible to the configured class loader
+ *     is accepted if it is a public, concrete (neither abstract nor an interface) {@link Packet} subclass with a
+ *     public {@code (CodecBuffer)} constructor. The class is loaded <b>without initialisation</b>; its static
  *     initialiser only runs once all checks passed. Names that do not denote such a class are rejected with a
- *     {@link PacketRejectedException}: unknown classes, non-packet classes, array names such as {@code [Lfoo;},
- *     primitive names such as {@code int}, abstract and non-public classes. Open mode trusts every packet class on
- *     the class path; a peer can make the receiver instantiate any of them.</li>
- *     <li><b>Allowlist mode</b> ({@link #restrictToRegistered(boolean) restrictToRegistered(true)}). Only classes
- *     passed to {@link #register(Class[])} are accepted, every other name is rejected without loading a class.
- *     Recommended for servers reachable by untrusted peers.</li>
+ *     {@link PacketRejectedException}. Open mode trusts every packet class on the class path; a peer can make
+ *     the receiver instantiate any of them. Only use it between trusted peers.</li>
  * </ul>
- * The built-in packets of this library ({@link AuthPacket} and the JSON packets) are always registered.
  */
 public final class PacketRegistry {
     private final Map<String, Class<? extends Packet>> registered = new ConcurrentHashMap<>();
     private final Map<String, Class<? extends Packet>> resolved = new ConcurrentHashMap<>();
     private final ClassLoader classLoader;
-    private volatile boolean restrictToRegistered;
+    private volatile boolean restrictToRegistered = true;
 
     public PacketRegistry() {
         this(PacketRegistry.class.getClassLoader());
@@ -41,11 +40,12 @@ public final class PacketRegistry {
 
     public PacketRegistry(@NotNull ClassLoader classLoader) {
         this.classLoader = classLoader;
-        register(AuthPacket.class, JsonPacket.class, JsonRequestPacket.class, JsonRespondPacket.class);
+        register(AuthPacket.class);
     }
 
     /**
-     * Registers packet classes. Registered classes are accepted in both modes.
+     * Registers packet classes. Registered classes are accepted in both modes. Registration does not initialise
+     * the class.
      *
      * @throws IllegalArgumentException if a class is abstract, not public or has no public {@code (CodecBuffer)}
      *                                  constructor
@@ -63,13 +63,17 @@ public final class PacketRegistry {
     }
 
     /**
-     * @param restrict if true only registered classes are accepted (allowlist mode)
+     * Switches to open mode: every public, concrete packet class on the class path is accepted. Only use it
+     * between trusted peers.
      */
-    public PacketRegistry restrictToRegistered(boolean restrict) {
-        this.restrictToRegistered = restrict;
+    public PacketRegistry allowAnyPacketClass() {
+        this.restrictToRegistered = false;
         return this;
     }
 
+    /**
+     * @return true in allowlist mode (the default), false after {@link #allowAnyPacketClass()}
+     */
     public boolean restrictToRegistered() {
         return restrictToRegistered;
     }

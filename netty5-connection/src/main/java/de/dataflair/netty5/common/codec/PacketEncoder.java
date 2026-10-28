@@ -8,6 +8,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.netty.handler.codec.TooLongFrameException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -20,6 +23,7 @@ import java.nio.charset.StandardCharsets;
  * would reject it anyway.
  */
 public final class PacketEncoder extends MessageToByteEncoder<Packet> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PacketEncoder.class);
     private final Netty5ClientChannel.Identity identity;
     private final int maxFrameLength;
 
@@ -72,7 +76,7 @@ public final class PacketEncoder extends MessageToByteEncoder<Packet> {
             out.writeInt(readableBytes);
             out.writeBytes(origin, origin.readerIndex(), readableBytes);
         } catch (RuntimeException e) {
-            System.err.println((identity != null ? "[identity: " + identity.name() + "] " : "")
+            LOGGER.warn((identity != null ? "[identity: " + identity.name() + "] " : "")
                     + "Error while encoding packet " + msg.getClass().getName());
             throw e;
         }
