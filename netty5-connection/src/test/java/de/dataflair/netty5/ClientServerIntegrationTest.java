@@ -272,7 +272,12 @@ class ClientServerIntegrationTest {
         }
         await(() -> server.connections().size() == count, 5_000, "all clients registered");
         assertNotNull(server.firstChannel("c3"));
-        assertNotNull(server.clientChannel(clients.get(5).identity().uuid()));
+        // the server derives the UUID from the canonical name; the client learns it from AuthAcceptedPacket
+        var effective = clients.get(5).authenticationFuture().get(5, TimeUnit.SECONDS);
+        assertEquals(Netty5Identities.derivedUuid("c5"), effective.uuid());
+        assertNotEquals(clients.get(5).identity().uuid(), effective.uuid());
+        assertNotNull(server.clientChannel(effective.uuid()));
+        assertNull(server.clientChannel(clients.get(5).identity().uuid()));
 
         for (var client : clients) {
             client.shutdownGracefully(0, 1, TimeUnit.SECONDS);

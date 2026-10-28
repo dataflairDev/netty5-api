@@ -1,6 +1,7 @@
 package de.dataflair.netty5.demo;
 
 import de.dataflair.netty5.Netty5ClientChannel;
+import de.dataflair.netty5.Netty5Identities;
 import de.dataflair.netty5.actions.ConnectionAction;
 import de.dataflair.netty5.common.codec.PacketRegistry;
 import de.dataflair.netty5.demo.packets.ChatMessagePacket;
@@ -59,15 +60,17 @@ public final class DemoServer {
         // A ConnectionFilter sees the identity and the auth properties of every AuthPacket. Returning false
         // closes the connection before it is added to connections(). Without any ConnectionFilter the server
         // refuses to start (unless allowAnonymous(true) is set).
-        // The token is looked up by the claimed name and compared in constant time, so a token only works for
-        // the name it was issued for. A second connection with the same name or UUID is rejected by default
-        // (IdentityPolicy.REJECT).
-        var allowed = Map.copyOf(tokensByName);
+        // The token is looked up by the canonical form of the claimed name (NFKC, lower case) and compared in
+        // constant time, so a token only works for the name it was issued for, in every spelling. The server
+        // derives the UUID of a client from that canonical name; a second connection with the same canonical
+        // name is rejected by default (IdentityPolicy.REJECT).
+        var allowed = new java.util.HashMap<String, String>();
+        tokensByName.forEach((name, token) -> allowed.put(Netty5Identities.canonicalName(name), token));
         server.addFilter(new ConnectionFilter() {
             @Override
             public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
                 var name = auth.clientChannel().identity().name();
-                var expected = allowed.get(name);
+                var expected = allowed.get(auth.canonicalName());
                 var accepted = expected != null
                         && ConnectionFilters.tokenEquals(expected, auth.authProperty().get(AUTH_TOKEN_PROPERTY));
                 if (!accepted && rejectedClients.size() < MAX_REJECTED_CLIENTS) {

@@ -22,6 +22,7 @@ import de.dataflair.netty5.Netty5ChannelInitializer;
 import de.dataflair.netty5.Netty5ChannelUtils;
 import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.Netty5Component;
+import de.dataflair.netty5.common.codec.PacketSizeEstimator;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelOption;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -57,6 +59,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Getter
 public final class Netty5Client extends Netty5Component {
+    /**
+     * Default interval in milliseconds after which an otherwise quiet client sends a keep-alive (60 s).
+     */
+    public static final long DEFAULT_KEEP_ALIVE_INTERVAL_MILLIS = 60_000;
     private static final AtomicInteger RECONNECT_THREAD_ID = new AtomicInteger();
     private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Client.class);
 
@@ -77,6 +83,25 @@ public final class Netty5Client extends Netty5Component {
     private volatile Netty5ClientChannel thisChannel;
     private volatile Bootstrap bootstrap;
     private volatile boolean shuttingDown;
+    /**
+     * If the client has written nothing for this many milliseconds after its authentication was accepted, it sends
+     * a {@link de.dataflair.netty5.common.packet.auth.KeepAlivePacket}, so the reader idle timeout of the server
+     * ({@code idleTimeoutMillis}, default 5 min) does not close a quiet connection. Default 60 s, 0 disables it.
+     * Must be set before {@link #initialize()} and below the idle timeout of the server.
+     */
+    @Setter
+    private volatile long keepAliveIntervalMillis = DEFAULT_KEEP_ALIVE_INTERVAL_MILLIS;
+    /**
+     * The identity the server uses for this client, as confirmed by its
+     * {@link de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket}; null until the current connection is
+     * accepted. By default the server derives the UUID from the canonical name
+     * ({@link de.dataflair.netty5.Netty5Identities#derivedUuid(String)}), so it differs from the UUID in
+     * {@link #identity()}.
+     */
+    @Setter(lombok.AccessLevel.PACKAGE)
+    private volatile @Nullable Netty5ClientChannel.Identity effectiveIdentity;
+    @Setter(lombok.AccessLevel.PACKAGE)
+    private volatile CompletableFuture<Netty5ClientChannel.Identity> authenticationFuture = new CompletableFuture<>();
 
     public Netty5Client(@NotNull String hostname,
                         int port,
@@ -105,7 +130,12 @@ public final class Netty5Client extends Netty5Component {
                 return new Netty5ClientHandler(Netty5Client.this);
             }
         };
-        initializer.maxOutboundBufferBytes(maxOutboundBufferBytes());
+        if (keepAliveIntervalMillis < 0) {
+            throw new IllegalArgumentException("keepAliveIntervalMillis must not be negative: "
+                    + keepAliveIntervalMillis);
+        }
+        // the client keeps reading while unwritable, otherwise both peers could wait for each other
+        initializer.maxOutboundBufferBytes(maxOutboundBufferBytes()).suspendReadWhenUnwritable(false);
         var ssl = sslContext();
         if (ssl != null) {
             if (!ssl.isClient()) {
@@ -131,7 +161,8 @@ public final class Netty5Client extends Netty5Component {
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.IP_TOS, 24)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000)
-                .option(ChannelOption.WRITE_BUFFER_WATER_MARK, writeBufferWaterMark());
+                .option(ChannelOption.WRITE_BUFFER_WATER_MARK, writeBufferWaterMark())
+                .option(ChannelOption.MESSAGE_SIZE_ESTIMATOR, PacketSizeEstimator.INSTANCE);
 
         if (Epoll.isAvailable() && Epoll.isTcpFastOpenClientSideAvailable()) {
             bootstrap.option(ChannelOption.TCP_FASTOPEN_CONNECT, true);
@@ -160,8 +191,20 @@ public final class Netty5Client extends Netty5Component {
     /**
      * Called by the handler when an established connection is lost.
      */
+    /**
+     * @return true if the client is connected and its outbound buffer is below the high water mark
+     */
+    public boolean isWritable() {
+        var channel = this.thisChannel;
+        return channel != null && channel.isWritable();
+    }
+
     void connectionLost() {
         connectionState(ConnectionState.DISCONNECTED);
+        effectiveIdentity = null;
+        if (!shuttingDown && authenticationFuture.isDone()) {
+            authenticationFuture = new CompletableFuture<>();
+        }
         // after shutdown no reconnect follows, so a new future would never complete
         if (!shuttingDown && connectionFuture().isDone()) {
             connectionFuture(new CommunicationFuture<>());

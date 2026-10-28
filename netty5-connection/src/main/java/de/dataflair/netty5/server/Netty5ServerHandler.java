@@ -24,7 +24,9 @@ import de.dataflair.netty5.common.codec.Netty5FrameDecoder;
 import de.dataflair.netty5.common.codec.PacketRejectedException;
 import de.dataflair.netty5.common.log.SafeLog;
 import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket;
 import de.dataflair.netty5.common.packet.auth.AuthPacket;
+import de.dataflair.netty5.common.packet.auth.KeepAlivePacket;
 import de.dataflair.netty5.filter.AsyncConnectionFilter;
 import de.dataflair.netty5.filter.ConnectionFilter;
 import de.dataflair.netty5.filter.PacketReceiveFilter;
@@ -50,8 +52,11 @@ import java.util.concurrent.TimeUnit;
  * Server side handler. One instance per child channel; its state is only touched on the channel's event loop.
  * <p>
  * The first auth packet decides: it passes the synchronous {@link ConnectionFilter}s and then the
- * {@link AsyncConnectionFilter}s, or the channel is closed. Every later auth packet is ignored, and nothing is
- * processed any more once the channel has been closed or rejected.
+ * {@link AsyncConnectionFilter}s, or the channel is closed. Every attempt takes a token of the
+ * {@link AuthFailureLimiter} when it starts and gives it back on success. A later auth packet counts as a rejected
+ * packet, and nothing is processed any more once the channel has been closed or rejected. After authentication
+ * the server answers with an {@link AuthAcceptedPacket} carrying the effective identity, and drops
+ * {@link KeepAlivePacket}s before any filter or listener.
  */
 public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packet> {
     private static final Logger LOGGER = LoggerFactory.getLogger(Netty5ServerHandler.class);
@@ -77,7 +82,8 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
             if (state == State.NEW) {
                 authenticate(ctx, authPacket);
             } else {
-                log(ctx, "Duplicate authentication ignored ({})", SafeLog.clean(authPacket.identity().name()));
+                log(ctx, "Duplicate authentication rejected ({})", SafeLog.clean(authPacket.identity().name()));
+                countRejected(ctx);
             }
             return;
         }
@@ -86,6 +92,15 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
         if (state != State.AUTHENTICATED || sender == null) {
             log(ctx, "Packet of unauthenticated channel rejected, closing {}", ctx.channel().remoteAddress());
             reject(ctx);
+            return;
+        }
+        if (packet instanceof KeepAlivePacket) {
+            // only resets the reader idle timeout
+            return;
+        }
+        if (packet instanceof AuthAcceptedPacket) {
+            log(ctx, "AuthAcceptedPacket from a client rejected ({})", SafeLog.clean(sender.identity().name()));
+            countRejected(ctx);
             return;
         }
 
@@ -105,13 +120,15 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
     private void authenticate(ChannelHandlerContext ctx, AuthPacket authPacket) {
         var name = SafeLog.clean(authPacket.identity().name());
         var address = address(ctx);
-        if (address != null && server.authFailureLimiter().isBlocked(address)) {
+        // the attempt is counted before any filter runs, so parallel attempts cannot all pass the check
+        if (address != null && !server.authFailureLimiter().tryAcquire(address)) {
             log(ctx, "Authentication of {} rejected, {} is blocked after failed authentications", name, address);
             reject(ctx);
             return;
         }
 
-        var netty5Channel = new Netty5ClientChannel(authPacket.identity(), ctx.channel(), null);
+        var identity = server.effectiveIdentity(authPacket.identity());
+        var netty5Channel = new Netty5ClientChannel(identity, ctx.channel(), null);
         var auth = new Netty5ClientChannel.AuthType(netty5Channel, authPacket.properties());
         for (var filter : server.filters()) {
             if (filter instanceof ConnectionFilter connectionFilter) {
@@ -132,7 +149,7 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
 
         var asyncFilters = server.asyncConnectionFilters();
         if (asyncFilters.isEmpty()) {
-            completeAuthentication(ctx, netty5Channel, name);
+            completeAuthentication(ctx, netty5Channel, name, address);
             return;
         }
 
@@ -167,7 +184,7 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
             failAuthentication(ctx, name, address);
             return;
         }
-        completeAuthentication(ctx, netty5Channel, name);
+        completeAuthentication(ctx, netty5Channel, name, address);
         if (state != State.AUTHENTICATED) {
             return;
         }
@@ -184,14 +201,17 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
     }
 
     private void failAuthentication(ChannelHandlerContext ctx, String name, @Nullable InetAddress address) {
+        // the token taken in authenticate() is not given back
         log(ctx, "Connection not permitted due to filter ({})", name);
-        if (address != null) {
-            server.authFailureLimiter().recordFailure(address);
-        }
         reject(ctx);
     }
 
-    private void completeAuthentication(ChannelHandlerContext ctx, Netty5ClientChannel netty5Channel, String name) {
+    private void completeAuthentication(ChannelHandlerContext ctx, Netty5ClientChannel netty5Channel, String name,
+                                        @Nullable InetAddress address) {
+        if (address != null) {
+            // the filters accepted: this attempt is no failure
+            server.authFailureLimiter().release(address);
+        }
         netty5Channel.transmitter(new Netty5ClientPacketTransmitter(server.workerGroup(), netty5Channel::sendPacket));
         if (!server.register(netty5Channel)) {
             log(ctx, "Identity {} ({}) is already connected, closing the new connection", name,
@@ -203,10 +223,17 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
         this.state = State.AUTHENTICATED;
         ctx.channel().attr(Netty5ChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
         cancelAuthTimeout();
+        var limiter = server.connectionLimiter();
+        if (limiter != null) {
+            limiter.authenticated(ctx.channel());
+        }
         var idle = server.idleTimeoutMillis();
         if (idle > 0) {
-            ctx.pipeline().addBefore(ctx.name(), "idle", new IdleStateHandler(0, 0, idle, TimeUnit.MILLISECONDS));
+            // reader idle: our own writes must not keep a peer alive that no longer sends anything
+            ctx.pipeline().addBefore(ctx.name(), "idle", new IdleStateHandler(idle, 0, 0, TimeUnit.MILLISECONDS));
         }
+        // the first packet the client receives tells it the identity the server uses
+        ctx.channel().writeAndFlush(new AuthAcceptedPacket(netty5Channel.identity()));
 
         runActions(ConnectionAction.State.CLIENT_AUTHENTICATED, netty5Channel);
     }
@@ -220,7 +247,7 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object event) throws Exception {
         if (event instanceof IdleStateEvent) {
-            log(ctx, "Idle timeout, closing {}", ctx.channel().remoteAddress());
+            log(ctx, "Nothing received within the idle timeout, closing {}", ctx.channel().remoteAddress());
             ctx.close();
             return;
         }

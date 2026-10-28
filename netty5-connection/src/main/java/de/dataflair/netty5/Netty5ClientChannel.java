@@ -42,6 +42,14 @@ public final class Netty5ClientChannel {
         channel.writeAndFlush(packet);
     }
 
+    /**
+     * @return true if the channel is open and its outbound buffer is below the high water mark
+     * ({@code writeBufferWaterMark}); a sender that produces a lot should wait while this is false
+     */
+    public boolean isWritable() {
+        return channel.isActive() && channel.isWritable();
+    }
+
     @Getter
     @AllArgsConstructor
     @NoArgsConstructor
@@ -62,7 +70,18 @@ public final class Netty5ClientChannel {
         }
     }
 
+    /**
+     * What a {@link de.dataflair.netty5.filter.ConnectionFilter} sees. {@code clientChannel().identity()} holds the
+     * name as sent and the UUID the server will use (derived from the canonical name unless the server trusts
+     * client UUIDs).
+     */
     public record AuthType(Netty5ClientChannel clientChannel, Map<String, String> authProperty) {
+        /**
+         * @return the canonical name ({@link Netty5Identities#canonicalName(String)}); bind tokens to this
+         */
+        public String canonicalName() {
+            return Netty5Identities.canonicalName(clientChannel.identity().name());
+        }
     }
 
 }

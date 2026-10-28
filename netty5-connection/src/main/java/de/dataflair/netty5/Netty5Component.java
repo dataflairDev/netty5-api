@@ -54,6 +54,10 @@ public abstract class Netty5Component {
      * Default hard limit of the outbound buffer per channel (8 MiB).
      */
     public static final long DEFAULT_MAX_OUTBOUND_BUFFER_BYTES = 8L * 1024 * 1024;
+    /**
+     * Default number of rejected packets after which an authenticated connection is closed.
+     */
+    public static final int DEFAULT_MAX_REJECTED_PACKETS = 16;
     private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Component.class);
 
     @Setter(AccessLevel.PROTECTED)
@@ -99,8 +103,8 @@ public abstract class Netty5Component {
     private volatile long handshakeTimeoutMillis = DEFAULT_HANDSHAKE_TIMEOUT_MILLIS;
     /**
      * Write buffer water marks in bytes (default 32 KiB / 64 KiB). Above the high water mark a channel is
-     * unwritable and stops reading until it drops below the low water mark again. Must be set before
-     * {@link #initialize()}.
+     * unwritable ({@code isWritable()} returns false); the server stops reading from such a channel until it drops
+     * below the low water mark again, the client keeps reading. Must be set before {@link #initialize()}.
      */
     @Setter
     private volatile @NotNull WriteBufferWaterMark writeBufferWaterMark = DEFAULT_WRITE_BUFFER_WATER_MARK;
@@ -110,6 +114,12 @@ public abstract class Netty5Component {
      */
     @Setter
     private volatile long maxOutboundBufferBytes = DEFAULT_MAX_OUTBOUND_BUFFER_BYTES;
+    /**
+     * Rejected packets (decode errors, unknown classes, filter rejections) after which a connection is closed,
+     * default {@value #DEFAULT_MAX_REJECTED_PACKETS}.
+     */
+    @Setter
+    private volatile int maxRejectedPackets = DEFAULT_MAX_REJECTED_PACKETS;
 
     public Netty5Component(int bossGroupThreads, @NotNull String hostname, int port) {
         this.bossGroup = Netty5ChannelUtils.createEventLoopGroup(bossGroupThreads);

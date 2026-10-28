@@ -23,28 +23,35 @@ import de.dataflair.netty5.Netty5Component;
 import de.dataflair.netty5.common.codec.PacketRejectedException;
 import de.dataflair.netty5.common.log.SafeLog;
 import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket;
 import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.server.Netty5Server;
+import de.dataflair.netty5.common.packet.auth.KeepAlivePacket;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.handler.timeout.IdleStateHandler;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Client side handler. Sends the {@link AuthPacket} when the connection is up, with TLS only after the handshake
- * has succeeded. After {@link Netty5Server#DEFAULT_MAX_REJECTED_PACKETS} rejected packets the connection is
- * closed (and re-established by the client).
+ * has succeeded. Consumes the {@link AuthAcceptedPacket} of the server (effective identity, starts the keep-alive)
+ * and drops {@link KeepAlivePacket}s. After {@code maxRejectedPackets} (default 16) rejected packets the
+ * connection is closed (and re-established by the client).
  */
 public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packet> {
     private static final Logger LOGGER = LoggerFactory.getLogger(Netty5ClientHandler.class);
 
     private final Netty5Client client;
     private int rejectedPackets;
+    private boolean accepted;
 
     public Netty5ClientHandler(@NotNull Netty5Client client) {
         this.client = client;
@@ -55,7 +62,43 @@ public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packe
         if (!ctx.channel().isActive()) {
             return;
         }
+        if (packet instanceof AuthAcceptedPacket acceptedPacket) {
+            if (!accepted) {
+                accepted(ctx, acceptedPacket);
+            }
+            return;
+        }
+        if (packet instanceof KeepAlivePacket) {
+            return;
+        }
         client.packetTransmitter().call(packet, null);
+    }
+
+    private void accepted(ChannelHandlerContext ctx, AuthAcceptedPacket packet) {
+        accepted = true;
+        var identity = packet.identity();
+        client.effectiveIdentity(identity);
+        var channel = client.thisChannel();
+        if (channel != null && channel.channel() == ctx.channel()) {
+            channel.identity(identity);
+        }
+        var interval = client.keepAliveIntervalMillis();
+        if (interval > 0 && ctx.pipeline().get("keep-alive") == null) {
+            ctx.pipeline().addBefore(ctx.name(), "keep-alive",
+                    new IdleStateHandler(0, interval, 0, TimeUnit.MILLISECONDS));
+        }
+        client.authenticationFuture().complete(identity);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object event) throws Exception {
+        if (event instanceof IdleStateEvent idle && idle.state() == IdleState.WRITER_IDLE) {
+            if (ctx.channel().isActive()) {
+                ctx.channel().writeAndFlush(new KeepAlivePacket());
+            }
+            return;
+        }
+        super.userEventTriggered(ctx, event);
     }
 
     @Override
@@ -103,7 +146,7 @@ public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packe
         }
         // after a framing error the stream position is lost; a rejected packet is skipped
         if (cause instanceof PacketRejectedException) {
-            if (++rejectedPackets >= Netty5Server.DEFAULT_MAX_REJECTED_PACKETS) {
+            if (++rejectedPackets >= client.maxRejectedPackets()) {
                 ctx.close();
             }
             return;

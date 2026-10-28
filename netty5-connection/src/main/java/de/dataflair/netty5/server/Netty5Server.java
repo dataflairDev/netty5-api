@@ -20,6 +20,8 @@ import de.dataflair.netty5.Netty5ChannelInitializer;
 import de.dataflair.netty5.Netty5ChannelUtils;
 import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.Netty5Component;
+import de.dataflair.netty5.Netty5Identities;
+import de.dataflair.netty5.common.codec.PacketSizeEstimator;
 import de.dataflair.netty5.filter.AsyncConnectionFilter;
 import de.dataflair.netty5.filter.ConnectionFilter;
 import de.dataflair.netty5.filter.Filter;
@@ -32,6 +34,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.ScheduledFuture;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -51,13 +54,15 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  *     <li>{@link #initialize()} refuses to start without a {@link ConnectionFilter} or
  *     {@link AsyncConnectionFilter}, unless {@code allowAnonymous(true)} is set.</li>
- *     <li>Connections are limited globally ({@link #maxConnections}) and per remote address
- *     ({@link #maxConnectionsPerAddress}); failed authentications are throttled per address
- *     ({@link #maxAuthFailuresPerMinute}).</li>
- *     <li>A second connection with the name or UUID of an authenticated one is handled by the
- *     {@link #identityPolicy} (default {@link IdentityPolicy#REJECT}).</li>
- *     <li>Authenticated connections are closed after {@link #idleTimeoutMillis} without traffic and after
- *     {@link #maxRejectedPackets} rejected packets.</li>
+ *     <li>Connections are limited globally ({@link #maxConnections}), before authentication
+ *     ({@link #maxUnauthenticatedConnections}) and per prefix ({@link #maxConnectionsPerAddress}); new connections
+ *     ({@link #maxNewConnectionsPerPrefix}) and authentication attempts ({@link #maxAuthFailuresPerMinute}) are
+ *     rate limited per prefix (IPv4 /32, IPv6 {@link #ipv6PrefixLength}).</li>
+ *     <li>The UUID of a client is derived from its canonical name ({@link Netty5Identities}) unless
+ *     {@link #trustClientUuid} is set. A second connection with the canonical name or UUID of an authenticated one
+ *     is handled by the {@link #identityPolicy} (default {@link IdentityPolicy#REJECT}).</li>
+ *     <li>Authenticated connections are closed after {@link #idleTimeoutMillis} without receiving anything (the
+ *     client sends keep-alives) and after {@code maxRejectedPackets} rejected packets.</li>
  * </ul>
  * Filters, listeners, responders and actions run on the event loop of the connection and must not block.
  */
@@ -74,7 +79,13 @@ public final class Netty5Server extends Netty5Component {
     public static final int DEFAULT_MAX_CONNECTIONS = 10_000;
     public static final int DEFAULT_MAX_CONNECTIONS_PER_ADDRESS = 64;
     public static final int DEFAULT_MAX_AUTH_FAILURES_PER_MINUTE = 10;
-    public static final int DEFAULT_MAX_REJECTED_PACKETS = 16;
+    public static final int DEFAULT_MAX_UNAUTHENTICATED_CONNECTIONS = 512;
+    public static final int DEFAULT_MAX_NEW_CONNECTIONS_PER_PREFIX = 30;
+    public static final long DEFAULT_NEW_CONNECTION_WINDOW_MILLIS = 10_000;
+    /**
+     * Interval in which the per-prefix limiters drop prefixes whose budget has refilled.
+     */
+    public static final long LIMITER_CLEANUP_INTERVAL_MILLIS = 10_000;
     public static final int DEFAULT_BACKLOG = 1024;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Server.class);
@@ -99,8 +110,9 @@ public final class Netty5Server extends Netty5Component {
     @Setter
     private volatile long authTimeoutMillis = DEFAULT_AUTH_TIMEOUT_MILLIS;
     /**
-     * Time in milliseconds an authenticated connection may stay without reading or writing before it is closed;
-     * 0 disables the timeout (logged as a warning). Must be set before {@link #initialize()}.
+     * Time in milliseconds an authenticated connection may stay without the server receiving anything before it is
+     * closed (reader idle; the client sends a {@code KeepAlivePacket} when it has nothing else to send); 0 disables
+     * the timeout (logged as a warning). Must be set before {@link #initialize()}.
      */
     @Setter
     private volatile long idleTimeoutMillis = DEFAULT_IDLE_TIMEOUT_MILLIS;
@@ -126,11 +138,41 @@ public final class Netty5Server extends Netty5Component {
     @Setter
     private volatile int maxAuthFailuresPerMinute = DEFAULT_MAX_AUTH_FAILURES_PER_MINUTE;
     /**
-     * Rejected packets (decode errors, unknown classes, {@link de.dataflair.netty5.filter.PacketReceiveFilter})
-     * after which an authenticated connection is closed.
+     * Maximum number of open connections that have not authenticated yet, default
+     * {@value #DEFAULT_MAX_UNAUTHENTICATED_CONNECTIONS}. Must be set before {@link #initialize()}.
      */
     @Setter
-    private volatile int maxRejectedPackets = DEFAULT_MAX_REJECTED_PACKETS;
+    private volatile int maxUnauthenticatedConnections = DEFAULT_MAX_UNAUTHENTICATED_CONNECTIONS;
+    /**
+     * New connections a prefix may open per {@link #newConnectionWindowMillis}, default
+     * {@value #DEFAULT_MAX_NEW_CONNECTIONS_PER_PREFIX}; 0 or less disables the limit. Must be set before
+     * {@link #initialize()}.
+     */
+    @Setter
+    private volatile int maxNewConnectionsPerPrefix = DEFAULT_MAX_NEW_CONNECTIONS_PER_PREFIX;
+    /**
+     * Window of {@link #maxNewConnectionsPerPrefix} in milliseconds, default 10 s.
+     */
+    @Setter
+    private volatile long newConnectionWindowMillis = DEFAULT_NEW_CONNECTION_WINDOW_MILLIS;
+    /**
+     * Bits of an IPv6 address that form the prefix the per-address limits are counted for, default 64. IPv4
+     * addresses are counted per address. Must be set before {@link #initialize()}.
+     */
+    @Setter
+    private volatile int ipv6PrefixLength = PrefixRateLimiter.DEFAULT_IPV6_PREFIX_LENGTH;
+    /**
+     * Maximum number of prefixes each rate limiter tracks; the least recently used one is dropped beyond that.
+     */
+    @Setter
+    private volatile int maxTrackedPrefixes = PrefixRateLimiter.DEFAULT_MAX_TRACKED_PREFIXES;
+    /**
+     * If true the server uses the UUID the client sends instead of deriving it from the canonical name. Off by
+     * default. With it on, a {@link ConnectionFilter} must check that the client may use that UUID, otherwise a
+     * client can take over or block the UUID of another one.
+     */
+    @Setter
+    private volatile boolean trustClientUuid;
     /**
      * Accept queue length ({@code SO_BACKLOG}). Must be set before {@link #initialize()}.
      */
@@ -143,6 +185,8 @@ public final class Netty5Server extends Netty5Component {
     private volatile @NotNull IdentityPolicy identityPolicy = IdentityPolicy.REJECT;
     private volatile AuthFailureLimiter authFailureLimiter = new AuthFailureLimiter(0);
     private volatile ConnectionLimiter connectionLimiter;
+    @Getter(AccessLevel.NONE)
+    private volatile ScheduledFuture<?> limiterCleanup;
     private volatile Channel serverChannel;
 
     public Netty5Server(@NotNull String hostname, int port) {
@@ -205,9 +249,18 @@ public final class Netty5Server extends Netty5Component {
                     prefix(), hostname());
         }
 
-        var limiter = new AuthFailureLimiter(maxAuthFailuresPerMinute);
+        var prefixLength = ipv6PrefixLength;
+        var tracked = maxTrackedPrefixes;
+        var limiter = new AuthFailureLimiter(maxAuthFailuresPerMinute, prefixLength, tracked);
+        var connectionRate = new PrefixRateLimiter(maxNewConnectionsPerPrefix, newConnectionWindowMillis,
+                prefixLength, tracked);
         this.authFailureLimiter = limiter;
-        this.connectionLimiter = new ConnectionLimiter(maxConnections, maxConnectionsPerAddress, limiter);
+        this.connectionLimiter = new ConnectionLimiter(maxConnections, maxConnectionsPerAddress,
+                maxUnauthenticatedConnections, limiter, connectionRate, prefixLength);
+        this.limiterCleanup = bossGroup().scheduleAtFixedRate(() -> {
+            limiter.cleanup();
+            connectionRate.cleanup();
+        }, LIMITER_CLEANUP_INTERVAL_MILLIS, LIMITER_CLEANUP_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
         var handshakeTimeout = authTimeout > 0 ? Math.min(handshakeTimeoutMillis(), authTimeout)
                 : handshakeTimeoutMillis();
 
@@ -223,6 +276,13 @@ public final class Netty5Server extends Netty5Component {
             initializer.sslHandlerFactory(channel -> {
                 var handler = ssl.newHandler(channel.alloc());
                 handler.setHandshakeTimeoutMillis(handshakeTimeout);
+                // failed or timed out handshakes count like failed authentications
+                handler.handshakeFuture().addListener(future -> {
+                    if (!future.isSuccess() && ConnectionLimiter.isAdmitted(channel)
+                            && channel.remoteAddress() instanceof InetSocketAddress remote) {
+                        limiter.recordFailure(remote.getAddress());
+                    }
+                });
                 return handler;
             });
         }
@@ -235,6 +295,7 @@ public final class Netty5Server extends Netty5Component {
                 .childOption(ChannelOption.IP_TOS, 24)
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, writeBufferWaterMark())
+                .childOption(ChannelOption.MESSAGE_SIZE_ESTIMATOR, PacketSizeEstimator.INSTANCE)
                 .bind(this.hostname(), this.port())
                 .addListener((ChannelFutureListener) future -> {
                     if (future.isSuccess()) {
@@ -247,15 +308,28 @@ public final class Netty5Server extends Netty5Component {
     }
 
     /**
-     * Adds an authenticated connection, applying the {@link #identityPolicy}.
+     * @return the identity the server uses for a client that sent {@code sent}: the name as sent and, unless
+     * {@link #trustClientUuid} is set, the UUID derived from the canonical name
+     */
+    public @NotNull Netty5ClientChannel.Identity effectiveIdentity(@NotNull Netty5ClientChannel.Identity sent) {
+        if (trustClientUuid && sent.uuid() != null) {
+            return new Netty5ClientChannel.Identity(sent.name(), sent.uuid());
+        }
+        return new Netty5ClientChannel.Identity(sent.name(), Netty5Identities.derivedUuid(sent.name()));
+    }
+
+    /**
+     * Adds an authenticated connection, applying the {@link #identityPolicy}. Conflicts are detected by canonical
+     * name and by the effective UUID only, both fixed by the server.
      *
      * @return false if the connection was rejected because its identity is in use
      */
     boolean register(@NotNull Netty5ClientChannel channel) {
         var identity = channel.identity();
+        var canonical = Netty5Identities.canonicalName(identity.name());
         synchronized (identityLock) {
             var conflicts = connections.stream()
-                    .filter(existing -> existing.identity().name().equalsIgnoreCase(identity.name())
+                    .filter(existing -> Netty5Identities.canonicalName(existing.identity().name()).equals(canonical)
                             || existing.identity().uuid().equals(identity.uuid()))
                     .toList();
             if (!conflicts.isEmpty()) {
@@ -295,6 +369,10 @@ public final class Netty5Server extends Netty5Component {
 
     @Override
     public Future<?> shutdownGracefully(long quietPeriod, long timeout, @NotNull TimeUnit unit) {
+        var cleanup = this.limiterCleanup;
+        if (cleanup != null) {
+            cleanup.cancel(false);
+        }
         var channel = this.serverChannel;
         if (channel != null) {
             channel.close();
@@ -303,9 +381,14 @@ public final class Netty5Server extends Netty5Component {
         return super.shutdownGracefully(quietPeriod, timeout, unit);
     }
 
+    /**
+     * @return the authenticated channels whose name has the same canonical form as {@code name}
+     */
     public List<Netty5ClientChannel> clientChannel(@NotNull String name) {
+        var canonical = Netty5Identities.canonicalName(name);
         return this.connections.stream()
-                .filter(clientChannel -> clientChannel.identity().name().equalsIgnoreCase(name))
+                .filter(clientChannel -> Netty5Identities.canonicalName(clientChannel.identity().name())
+                        .equals(canonical))
                 .toList();
     }
 
@@ -313,6 +396,9 @@ public final class Netty5Server extends Netty5Component {
         return this.clientChannel(name).stream().findFirst().orElse(null);
     }
 
+    /**
+     * @param uuid the effective UUID, by default {@link Netty5Identities#derivedUuid(String)} of the client name
+     */
     public Netty5ClientChannel clientChannel(@NotNull UUID uuid) {
         return this.connections.stream()
                 .filter(clientChannel -> uuid.equals(clientChannel.identity().uuid()))

@@ -233,6 +233,33 @@ final class AttackHarness {
         data.write(bytes);
     }
 
+    /**
+     * Reads frames until one of class {@code className} arrives, skipping the {@code AuthAcceptedPacket} the
+     * server sends after authentication.
+     *
+     * @return false on timeout, close or any other frame
+     */
+    static boolean readFrameOf(Socket socket, String className, long millis) {
+        try {
+            socket.setSoTimeout((int) millis);
+            var in = new java.io.DataInputStream(socket.getInputStream());
+            while (true) {
+                int length = in.readInt();
+                var frame = in.readNBytes(length);
+                var data = new java.io.DataInputStream(new java.io.ByteArrayInputStream(frame));
+                var name = new String(data.readNBytes(data.readInt()), StandardCharsets.UTF_8);
+                if (name.equals(className)) {
+                    return true;
+                }
+                if (!name.equals(de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket.class.getName())) {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     static void send(Socket socket, byte[] bytes) throws IOException {
         socket.getOutputStream().write(bytes);
         socket.getOutputStream().flush();

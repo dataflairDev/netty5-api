@@ -5,7 +5,6 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufAllocatorMetricProvider;
 import org.junit.jupiter.api.Test;
 
-import java.io.DataInputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 
@@ -80,7 +79,7 @@ class Attack03PreAuthMemoryTest {
                 long start = System.nanoTime();
                 AttackHarness.send(legit, AttackHarness.frame(TestPacket.class.getName(),
                         AttackHarness.testPacketContent("ping", 1)));
-                boolean echoed = readOneFrame(legit, 5_000);
+                boolean echoed = AttackHarness.readFrameOf(legit, TestPacket.class.getName(), 5_000);
                 long latencyMs = (System.nanoTime() - start) / 1_000_000;
                 System.out.println("[attack3] legit client echo received=" + echoed + " latencyMs=" + latencyMs);
                 assertTrue(echoed, "legit client should still be serviced");
@@ -108,17 +107,6 @@ class Attack03PreAuthMemoryTest {
         }
     }
 
-    private static boolean readOneFrame(Socket socket, long millis) {
-        try {
-            socket.setSoTimeout((int) millis);
-            var in = new DataInputStream(socket.getInputStream());
-            int len = in.readInt();
-            in.readNBytes(len);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
 
     private static long nettyUsedMemory() {
         var alloc = ByteBufAllocator.DEFAULT;

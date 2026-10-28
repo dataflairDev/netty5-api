@@ -1,7 +1,9 @@
 package de.dataflair.netty5.common.codec;
 
 import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket;
 import de.dataflair.netty5.common.packet.auth.AuthPacket;
+import de.dataflair.netty5.common.packet.auth.KeepAlivePacket;
 import de.dataflair.netty5.common.packet.json.JsonPacket;
 import de.dataflair.netty5.common.packet.json.JsonRequestPacket;
 import de.dataflair.netty5.common.packet.json.JsonRespondPacket;
@@ -17,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * The registry has two modes:
  * <ul>
  *     <li><b>Allowlist mode (default).</b> Only classes passed to {@link #register(Class[])} are accepted, every
- *     other name is rejected without loading a class. Only {@link AuthPacket} is registered from the start; the
+ *     other name is rejected without loading a class. Only the protocol packets {@link AuthPacket},
+ *     {@link AuthAcceptedPacket} and {@link KeepAlivePacket} are registered from the start; the
  *     built-in JSON packets ({@link JsonPacket}, {@link JsonRequestPacket}, {@link JsonRespondPacket}) must be
  *     registered like any other packet if they are used.</li>
  *     <li><b>Open mode</b> ({@link #allowAnyPacketClass()}). Every class visible to the configured class loader
@@ -40,7 +43,7 @@ public final class PacketRegistry {
 
     public PacketRegistry(@NotNull ClassLoader classLoader) {
         this.classLoader = classLoader;
-        register(AuthPacket.class);
+        register(AuthPacket.class, AuthAcceptedPacket.class, KeepAlivePacket.class);
     }
 
     /**

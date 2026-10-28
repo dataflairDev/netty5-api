@@ -6,7 +6,6 @@ import io.netty.buffer.Unpooled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicReference;
@@ -129,11 +128,7 @@ class Attack05AuthenticatedMaliciousTest {
         try {
             AttackHarness.send(socket, AttackHarness.frame(TestPacket.class.getName(),
                     AttackHarness.testPacketContent("alive", 1)));
-            socket.setSoTimeout(3_000);
-            var in = new DataInputStream(socket.getInputStream());
-            int len = in.readInt();
-            in.readNBytes(len);
-            return true;
+            return AttackHarness.readFrameOf(socket, TestPacket.class.getName(), 3_000);
         } catch (Exception e) {
             return false;
         }

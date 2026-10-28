@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.net.ssl.KeyManagerFactory;
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.Socket;
@@ -85,10 +84,10 @@ class SecurityHardeningTest {
             // same name (other case), other UUID
             AttackHarness.send(second, authFrame("ALICE", UUID.randomUUID()));
             assertTrue(closedWithin(second, 3_000), "duplicate name must be rejected");
-            // other name, same UUID
+            // other name, same UUID: the server derives the UUID from the name, so this is no conflict
             AttackHarness.send(third, authFrame("bob", uuid));
-            assertTrue(closedWithin(third, 3_000), "duplicate UUID must be rejected");
-            assertEquals(1, harness.server().connections().size());
+            harness.awaitAuthenticated("bob", 5_000);
+            assertEquals(2, harness.server().connections().size());
             assertFalse(closedWithin(first, 300), "the first connection stays");
         } finally {
             harness.stop();
@@ -205,7 +204,7 @@ class SecurityHardeningTest {
             // auth and a payload in one write: the payload is decoded only after the filter accepted
             AttackHarness.send(accepted, concat(AttackHarness.authFrame("async-ok", AttackHarness.TOKEN),
                     AttackHarness.frame(TestPacket.class.getName(), AttackHarness.testPacketContent("early", 7))));
-            assertTrue(readOneFrame(accepted, 3_000), "pipelined payload must be echoed after acceptance");
+            assertTrue(AttackHarness.readFrameOf(accepted, TestPacket.class.getName(), 3_000), "pipelined payload must be echoed after acceptance");
 
             AttackHarness.send(denied, AttackHarness.authFrame("denied", AttackHarness.TOKEN));
             assertTrue(closedWithin(denied, 3_000), "async rejection must close the connection");
@@ -361,7 +360,7 @@ class SecurityHardeningTest {
 
     // ---- helpers ----------------------------------------------------------------
 
-    private static void generateKeyStore(File file) throws Exception {
+    static void generateKeyStore(File file) throws Exception {
         var keytool = Path.of(System.getProperty("java.home"), "bin",
                 System.getProperty("os.name").toLowerCase().contains("win") ? "keytool.exe" : "keytool");
         var process = new ProcessBuilder(keytool.toString(), "-genkeypair", "-alias", "server",
@@ -413,17 +412,6 @@ class SecurityHardeningTest {
         }
     }
 
-    private static boolean readOneFrame(Socket socket, long millis) {
-        try {
-            socket.setSoTimeout((int) millis);
-            var in = new DataInputStream(socket.getInputStream());
-            int len = in.readInt();
-            in.readNBytes(len);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
 
     private static void awaitTrue(java.util.function.BooleanSupplier condition, String what) throws Exception {
         long deadline = System.currentTimeMillis() + 3_000;
