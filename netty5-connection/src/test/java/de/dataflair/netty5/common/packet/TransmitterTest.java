@@ -97,7 +97,7 @@ class TransmitterTest {
     }
 
     /**
-     * Fix 21: generated keys use the alphanumeric alphabet.
+     * Fix 21: random listener keys use the alphanumeric alphabet.
      */
     @Test
     void generatedKeysAreAlphanumeric() {
