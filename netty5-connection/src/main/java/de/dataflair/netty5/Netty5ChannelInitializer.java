@@ -42,6 +42,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
     private @Nullable ChannelHandler firstHandler;
     private @Nullable Function<Channel, SslHandler> sslHandlerFactory;
     private long maxOutboundBufferBytes = Netty5Component.DEFAULT_MAX_OUTBOUND_BUFFER_BYTES;
+    private boolean suspendReadWhenUnwritable = true;
 
     public Netty5ChannelInitializer(Netty5ClientChannel.Identity identity) {
         this(identity, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, null, false);
@@ -115,6 +116,15 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
         return this;
     }
 
+    /**
+     * @param suspend true (default) to stop reading while the channel is unwritable; the client passes false, see
+     *                {@link BackpressureHandler}
+     */
+    public Netty5ChannelInitializer suspendReadWhenUnwritable(boolean suspend) {
+        this.suspendReadWhenUnwritable = suspend;
+        return this;
+    }
+
     @Override
     protected void initChannel(@NotNull Channel channel) {
         var pipeline = channel.pipeline();
@@ -124,7 +134,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
         if (sslHandlerFactory != null) {
             pipeline.addLast("ssl", sslHandlerFactory.apply(channel));
         }
-        pipeline.addLast("backpressure", new BackpressureHandler(maxOutboundBufferBytes))
+        pipeline.addLast("backpressure", new BackpressureHandler(maxOutboundBufferBytes, suspendReadWhenUnwritable))
                 .addLast("frame-decoder", new Netty5FrameDecoder(maxFrameLength, preAuthMaxFrameLength,
                         requireAuthentication))
                 .addLast("packet-decoder", new PacketDecoder(identity, packetRegistry, requireAuthentication,

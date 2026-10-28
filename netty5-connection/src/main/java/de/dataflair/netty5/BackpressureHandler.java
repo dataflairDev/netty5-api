@@ -13,7 +13,9 @@ import org.slf4j.LoggerFactory;
  *     <li>When the channel becomes unwritable (pending bytes above the high water mark, see
  *     {@link io.netty.channel.ChannelOption#WRITE_BUFFER_WATER_MARK}) reading is suspended
  *     ({@code autoRead=false}), so a peer that does not read cannot make us produce more responses. Reading
- *     resumes when the channel is writable again.</li>
+ *     resumes when the channel is writable again. Only on the server ({@code suspendReadWhenUnwritable}): if both
+ *     peers stopped reading while unwritable, neither would ever drain the other's buffer, so the client keeps
+ *     reading and relies on the hard limit below.</li>
  *     <li>If the pending bytes exceed {@code maxOutboundBufferBytes} anyway (for example because the application
  *     keeps writing on its own), the channel is closed.</li>
  * </ul>
@@ -22,17 +24,31 @@ public final class BackpressureHandler extends ChannelDuplexHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(BackpressureHandler.class);
 
     private final long maxOutboundBufferBytes;
+    private final boolean suspendReadWhenUnwritable;
 
     public BackpressureHandler(long maxOutboundBufferBytes) {
+        this(maxOutboundBufferBytes, true);
+    }
+
+    /**
+     * @param maxOutboundBufferBytes    pending bytes above which the channel is closed
+     * @param suspendReadWhenUnwritable if true reading is suspended while the channel is unwritable (server side)
+     */
+    public BackpressureHandler(long maxOutboundBufferBytes, boolean suspendReadWhenUnwritable) {
         if (maxOutboundBufferBytes <= 0) {
             throw new IllegalArgumentException("maxOutboundBufferBytes must be positive: " + maxOutboundBufferBytes);
         }
         this.maxOutboundBufferBytes = maxOutboundBufferBytes;
+        this.suspendReadWhenUnwritable = suspendReadWhenUnwritable;
     }
 
     @Override
     public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
         var channel = ctx.channel();
+        if (!suspendReadWhenUnwritable) {
+            super.channelWritabilityChanged(ctx);
+            return;
+        }
         if (channel.isWritable()) {
             Netty5ChannelUtils.resumeRead(channel, Netty5ChannelUtils.READ_SUSPENDED_BACKPRESSURE);
         } else {
