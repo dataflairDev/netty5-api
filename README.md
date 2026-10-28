@@ -9,7 +9,8 @@ encodes and decodes them and routes them to listeners. On top of that it offers:
 - request/response with `queryPacket` (asynchronous, `CompletableFuture`) and `queryPacketDirect` (blocking),
   answered by responders registered with `listenQuery`,
 - automatic reconnect of the client,
-- a packet registry with an allowlist mode, frame limits and an authentication timeout.
+- secure defaults: the server refuses to start without a connection filter, only registered packet classes
+  are accepted, frames, connections, failed logins and outbound buffers are limited, and TLS is optional.
 
 The `netty5-demo` module contains a complete, runnable example
 (`de.dataflair.netty5.demo.DemoApplication`); the snippets below are taken from it.
@@ -17,42 +18,7 @@ The `netty5-demo` module contains a complete, runnable example
 ## Requirements
 
 - Java 27
-
-## Dependency
-
-The library is published to the public Dataflair repository.
-
-Gradle (Kotlin DSL):
-
-```kotlin
-repositories {
-    mavenCentral()
-    maven("https://rp1.dataflair.cloud/repository/dataflair-public-release/")
-}
-
-dependencies {
-    implementation("de.dataflair.netty5-api:netty5-connection:2.0.0")
-}
-```
-
-Maven:
-
-```xml
-<repositories>
-    <repository>
-        <id>dataflair-public-release</id>
-        <url>https://rp1.dataflair.cloud/repository/dataflair-public-release/</url>
-    </repository>
-</repositories>
-
-<dependency>
-    <groupId>de.dataflair.netty5-api</groupId>
-    <artifactId>netty5-connection</artifactId>
-    <version>2.0.0</version>
-</dependency>
-```
-
-Netty and Gson come in as transitive dependencies.
+- an SLF4J 2 binding if you want to see the log output of the library
 
 ## Quick start
 
@@ -131,17 +97,21 @@ for request/response packets), not in a base class constructor. To decode a pack
 var server = new Netty5Server("127.0.0.1", 9000);
 
 // configure everything before initialize()
+// allowlist mode is the default: only registered classes (and AuthPacket) can be received
 server.packetRegistry(new PacketRegistry()
-        .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class)
-        .restrictToRegistered(true));
+        .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class));
 server.maxFrameLength(1024 * 1024);      // default 16 MiB
 server.preAuthMaxFrameLength(16 * 1024); // default 64 KiB
 server.authTimeoutMillis(5_000);         // default 10 s
 
+// the token is bound to the name the client claims and compared in constant time
+var tokensByName = Map.of("demo-client", System.getenv("NETTY5_DEMO_TOKEN"));
 server.addFilter(new ConnectionFilter() {
     @Override
     public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
-        return "demo-secret".equals(auth.authProperty().get("token")); // false closes the connection
+        var expected = tokensByName.get(auth.clientChannel().identity().name());
+        return expected != null
+                && ConnectionFilters.tokenEquals(expected, auth.authProperty().get("token")); // false closes
     }
 });
 
@@ -157,24 +127,30 @@ server.packetTransmitter().listen(ChatMessagePacket.class, (sender, packet) ->
 server.packetTransmitter().listenQuery(UserLookupRequest.class, request ->
         new UserLookupResponse(true, "Alice", List.of("admin")));
 
-server.initialize();
+server.initialize();                                 // throws without a ConnectionFilter
 server.connectionFuture().get(5, TimeUnit.SECONDS); // bound (or failed)
 ```
+
+`initialize()` throws an `IllegalStateException` if neither a `ConnectionFilter` nor an `AsyncConnectionFilter`
+is registered. A server that really should accept everybody has to say so with `server.allowAnonymous(true)`.
 
 `server.connections()` holds the authenticated clients; `firstChannel(name)` and `clientChannel(uuid)` look one
 up. The server sends to a client with `channel.sendPacket(...)` and queries it through the channel's transmitter,
 `channel.transmitter().queryPacket(...)`. `server.packetTransmitter()` itself has no single peer, its query
 methods throw `UnsupportedOperationException`.
 
+Filters, listeners, responders and connection actions run on the event loop of the connection and must not
+block. A filter that has to wait for a database or another service is an `AsyncConnectionFilter`: it returns a
+`CompletionStage<Boolean>`, and the server stops reading from the connection until the stage has completed.
+
 ### Client
 
 ```java
 var client = new Netty5Client("127.0.0.1", 9000,
         new Netty5ClientChannel.Identity("demo-client", UUID.randomUUID()),
-        Map.of("token", "demo-secret"));
+        Map.of("token", System.getenv("NETTY5_DEMO_TOKEN")));
 client.packetRegistry(new PacketRegistry()
-        .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class)
-        .restrictToRegistered(true));
+        .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class));
 
 // listeners and responders survive reconnects; register them before initialize()
 client.packetTransmitter().listen(ChatMessagePacket.class, (_, packet) -> System.out.println(packet.text()));
@@ -183,7 +159,8 @@ client.initialize();
 client.connectionFuture().get(5, TimeUnit.SECONDS);
 ```
 
-`connectionFuture()` completes when the TCP connection is up and the `AuthPacket` has been written. There is no
+`connectionFuture()` completes when the TCP connection (and, with TLS, the handshake) is up and the
+`AuthPacket` has been written. There is no
 acknowledgement of the authentication: a rejected client is disconnected and keeps reconnecting
 (`reconnectDelayMillis`, default 5 s) until it is shut down.
 
@@ -226,21 +203,53 @@ reconnecting when it is shut down.
 ```
 
 It starts a server and two clients (one with a wrong token) in one JVM, runs every step above once and exits.
+The token of the demo client is read from the environment variable `NETTY5_DEMO_TOKEN`; without it the demo
+falls back to a built-in token and logs a warning.
 `./gradlew :netty5-demo:test` runs the same flow as a test.
 
 ## Security notes
 
-- **Allowlist mode.** Incoming packets carry their class name. In the default open mode the registry accepts
-  every public, concrete packet class on the class path. For servers reachable by untrusted peers enable
-  `restrictToRegistered(true)` and register your packet classes; `AuthPacket` and the JSON packets are
-  registered by default.
-- **Frame limits.** Frames are limited to `maxFrameLength` (default 16 MiB); larger incoming frames close the
-  connection, larger outgoing packets fail the write. Before authentication the limit is
-  `preAuthMaxFrameLength` (default 64 KiB) and an `AuthPacket` may carry at most 256 properties. Set the limits
-  to what your packets actually need.
-- **Authentication.** Until an `AuthPacket` has passed all `ConnectionFilter`s, every other packet closes the
-  connection. Connections that do not authenticate within `authTimeoutMillis` (default 10 s) are closed. The
-  auth properties are sent in plain text; the library does not encrypt the connection.
+- **Fail-closed start.** `Netty5Server.initialize()` throws if no `ConnectionFilter` or `AsyncConnectionFilter`
+  is registered, unless `allowAnonymous(true)` is set (which is logged as a warning).
+- **Allowlist.** Incoming packets carry their class name. By default the `PacketRegistry` only accepts classes
+  registered with `register(...)` plus `AuthPacket`; the built-in JSON packets have to be registered like any
+  other packet. `allowAnyPacketClass()` switches to the open mode, which lets the peer instantiate every public,
+  concrete packet class on the class path; only use it between trusted peers. Any error while a packet class is
+  loaded or constructed (including `ExceptionInInitializerError` and `StackOverflowError`) closes the connection.
+- **Authentication and identity.** Until an `AuthPacket` has passed all filters, every other packet closes the
+  connection, and connections that do not authenticate within `authTimeoutMillis` (default 10 s) are closed. Only
+  the first `AuthPacket` of a connection is evaluated. The filter decides which identity a client may use: bind
+  the token to the claimed name (see the server example) and compare it with `ConnectionFilters.tokenEquals`. A
+  second connection with the name (case-insensitive) or UUID of an authenticated one is rejected by default;
+  `identityPolicy(IdentityPolicy.REPLACE_OLD)` closes the old connection instead.
+- **Authorization.** The library does not know which packets a client may send. Check this in a
+  `PacketReceiveFilter` (sender and packet). A response that does not answer a pending request is dropped and
+  never reaches a listener.
+- **Limits.**
+  - Frames: `maxFrameLength` (default 16 MiB) after authentication, `preAuthMaxFrameLength` (default 64 KiB)
+    before. The pre-auth limit is checked as soon as the length field arrives, so an unauthenticated peer cannot
+    make the server buffer more than that. An `AuthPacket` carries at most 256 properties.
+  - Connections: `maxConnections` (default 10000) and `maxConnectionsPerAddress` (default 64), checked by the
+    first handler of every connection; `backlog` sets `SO_BACKLOG` (default 1024).
+  - Failed logins: `maxAuthFailuresPerMinute` (default 10) per remote address; after that the address is
+    rejected until its budget has refilled.
+  - Rejected packets: after `maxRejectedPackets` (default 16) decode errors or filter rejections an
+    authenticated connection is closed.
+  - Idle connections: `idleTimeoutMillis` (default 5 min) closes an authenticated connection without traffic;
+    `0` disables it with a warning. `authTimeoutMillis <= 0` is allowed but logged as a warning.
+  - Deserialisation: `CodecBuffer.readList`/`readMap` check the announced size against the readable bytes, stop
+    if an element consumes no byte and have overloads with a `maxSize`; `readEnum` checks the ordinal;
+    `readJsonObject()` reads at most 1 MiB (`readJsonObject(maxLength)` for other limits).
+- **Backpressure.** `writeBufferWaterMark` (default 32/64 KiB) controls when a connection becomes unwritable;
+  while it is, the library stops reading from it. If the pending bytes still exceed `maxOutboundBufferBytes`
+  (default 8 MiB) the connection is closed.
+- **TLS.** Without `sslContext` the connection is plain TCP and the auth properties travel in clear text; the
+  server logs a warning when it binds a non-loopback address without TLS. With a server `SslContext` the
+  `SslHandler` is the first handler that sees the bytes, and the handshake timeout (`handshakeTimeoutMillis`,
+  default 10 s) is capped at the authentication timeout. A client `SslContext` verifies the host name
+  (`endpointIdentificationAlgorithm=HTTPS`) and the client sends its `AuthPacket` only after the handshake.
+- **Logging.** The library logs through SLF4J. Values chosen by the peer are cut to 200 characters and stripped
+  of control characters, and log lines are throttled per connection.
 
 ## Migrating from 1.x
 
