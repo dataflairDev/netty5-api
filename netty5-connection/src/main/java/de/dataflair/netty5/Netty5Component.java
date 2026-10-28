@@ -19,23 +19,24 @@ package de.dataflair.netty5;
  */
 
 import de.dataflair.netty5.actions.Action;
-import io.netty5.channel.Channel;
-import io.netty5.channel.EventLoopGroup;
-import io.netty5.util.concurrent.FutureListener;
+import de.dataflair.netty5.common.codec.PacketRegistry;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.Future;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 @Getter
 public abstract class Netty5Component {
     @Setter(AccessLevel.PROTECTED)
-    private CommunicationFuture<Void> connectionFuture = new CommunicationFuture<>();
+    private volatile CommunicationFuture<Void> connectionFuture = new CommunicationFuture<>();
     @Getter
     private final EventLoopGroup bossGroup;
     @Getter(AccessLevel.PROTECTED)
@@ -43,9 +44,19 @@ public abstract class Netty5Component {
     @Getter(AccessLevel.PROTECTED)
     private final int port;
     @Getter
-    private final List<Action<?>> actions = new ArrayList<>();
+    private final List<Action<?>> actions = new CopyOnWriteArrayList<>();
     @Setter
-    private ConnectionState connectionState = ConnectionState.UNDEFINED;
+    private volatile ConnectionState connectionState = ConnectionState.UNDEFINED;
+    /**
+     * Maximum accepted frame length in bytes, default 16 MiB. Must be set before {@link #initialize()}.
+     */
+    @Setter
+    private volatile int maxFrameLength = Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH;
+    /**
+     * Registry used to resolve incoming packet classes. Must be set before {@link #initialize()}.
+     */
+    @Setter
+    private volatile @NotNull PacketRegistry packetRegistry = new PacketRegistry();
 
     public Netty5Component(int bossGroupThreads, @NotNull String hostname, int port) {
         this.bossGroup = Netty5ChannelUtils.createEventLoopGroup(bossGroupThreads);
@@ -58,14 +69,22 @@ public abstract class Netty5Component {
     }
 
     public void shutdownGracefully() {
-        bossGroup.shutdownGracefully();
+        shutdownGracefully(2, 15, TimeUnit.SECONDS);
     }
 
-    public FutureListener<? super Channel> deployFuture() {
+    /**
+     * Shuts the component down.
+     *
+     * @return the termination future of the boss group
+     */
+    public Future<?> shutdownGracefully(long quietPeriod, long timeout, @NotNull TimeUnit unit) {
+        return bossGroup.shutdownGracefully(quietPeriod, timeout, unit);
+    }
+
+    public ChannelFutureListener deployFuture() {
         return it -> {
             if (it.isSuccess()) {
                 connectionFuture.complete(null);
-                it.getNow().closeFuture();
             } else {
                 connectionFuture.completeExceptionally(it.cause());
             }

@@ -20,33 +20,49 @@ import de.dataflair.netty5.Netty5ChannelInitializer;
 import de.dataflair.netty5.Netty5ChannelUtils;
 import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.Netty5Component;
-import de.dataflair.netty5.actions.Action;
-import de.dataflair.netty5.actions.ConnectionAction;
-import de.dataflair.netty5.filter.ConnectionFilter;
 import de.dataflair.netty5.filter.Filter;
-import io.netty5.bootstrap.ServerBootstrap;
-import io.netty5.channel.ChannelOption;
-import io.netty5.channel.EventLoopGroup;
-import io.netty5.channel.SimpleChannelInboundHandler;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.util.concurrent.Future;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 @Getter
 public final class Netty5Server extends Netty5Component {
+    /**
+     * Default time in milliseconds a connection may stay unauthenticated before it is closed.
+     */
+    public static final long DEFAULT_AUTH_TIMEOUT_MILLIS = 10_000;
+
     private final EventLoopGroup workerGroup = Netty5ChannelUtils.createEventLoopGroup(0);
-    private final List<Filter<?>> filters = new ArrayList<>();
+    private final List<Filter<?>> filters = new CopyOnWriteArrayList<>();
     private final Netty5ServerPacketTransmitter packetTransmitter;
+    /**
+     * Authenticated connections. Thread-safe; entries are added after a successful authentication and removed
+     * when the channel becomes inactive.
+     */
+    private final List<Netty5ClientChannel> connections = new CopyOnWriteArrayList<>();
     @Setter
-    private List<Netty5ClientChannel> connections = new ArrayList<>();
+    private volatile Netty5ClientChannel.Identity serverIdentity;
+    /**
+     * Time in milliseconds a connection may stay unauthenticated before it is closed; 0 or less disables the
+     * timeout. Must be set before {@link #initialize()}.
+     */
     @Setter
-    private Netty5ClientChannel.Identity serverIdentity;
+    private volatile long authTimeoutMillis = DEFAULT_AUTH_TIMEOUT_MILLIS;
+    private volatile Channel serverChannel;
 
     public Netty5Server(@NotNull String hostname, int port) {
         super(1, hostname, port);
@@ -64,31 +80,47 @@ public final class Netty5Server extends Netty5Component {
 
     @Override
     public void initialize() throws Exception {
+        var initializer = new Netty5ChannelInitializer(this.serverIdentity, maxFrameLength(), packetRegistry(), true) {
+            @Override
+            public SimpleChannelInboundHandler<?> handler() {
+                return new Netty5ServerHandler(Netty5Server.this);
+            }
+        };
         new ServerBootstrap()
                 .group(bossGroup(), workerGroup)
                 .channelFactory(Netty5ChannelUtils.buildChannelFactory())
-                .childHandler(new Netty5ChannelInitializer(this.serverIdentity) {
-                    @Override
-                    public SimpleChannelInboundHandler<?> handler() {
-                        return new Netty5ServerHandler(Netty5Server.this);
-                    }
-                })
+                .childHandler(initializer)
                 .childOption(ChannelOption.TCP_NODELAY, true)
                 .childOption(ChannelOption.IP_TOS, 24)
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .bind(this.hostname(), this.port())
-                .addListener(deployFuture())
-                .addListener(future -> {
-                    if (!future.isSuccess()) {
-                        throw new RuntimeException(future.cause());
+                .addListener((ChannelFutureListener) future -> {
+                    if (future.isSuccess()) {
+                        this.serverChannel = future.channel();
+                    } else {
+                        System.err.println((serverIdentity != null ? "[server: " + serverIdentity.name() + "] " : "")
+                                + "Bind failed: " + future.cause());
                     }
-                });
+                })
+                .addListener(deployFuture());
+    }
+
+    /**
+     * @return the address the server is bound to, or null if it is not bound (yet)
+     */
+    public @Nullable InetSocketAddress localAddress() {
+        var channel = this.serverChannel;
+        return channel == null ? null : (InetSocketAddress) channel.localAddress();
     }
 
     @Override
-    public void shutdownGracefully() {
-        this.workerGroup.shutdownGracefully();
-        super.shutdownGracefully();
+    public Future<?> shutdownGracefully(long quietPeriod, long timeout, @NotNull TimeUnit unit) {
+        var channel = this.serverChannel;
+        if (channel != null) {
+            channel.close();
+        }
+        this.workerGroup.shutdownGracefully(quietPeriod, timeout, unit);
+        return super.shutdownGracefully(quietPeriod, timeout, unit);
     }
 
     public List<Netty5ClientChannel> clientChannel(@NotNull String name) {
@@ -103,7 +135,7 @@ public final class Netty5Server extends Netty5Component {
 
     public Netty5ClientChannel clientChannel(@NotNull UUID uuid) {
         return this.connections.stream()
-                .filter(clientChannel -> clientChannel.identity().uuid().equals(uuid))
+                .filter(clientChannel -> uuid.equals(clientChannel.identity().uuid()))
                 .findFirst()
                 .orElse(null);
     }

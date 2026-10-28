@@ -22,8 +22,9 @@ import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.Netty5Component;
 import de.dataflair.netty5.common.packet.Packet;
 import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import io.netty5.channel.ChannelHandlerContext;
-import io.netty5.channel.SimpleChannelInboundHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.TooLongFrameException;
 import lombok.AllArgsConstructor;
 
 import java.io.IOException;
@@ -33,35 +34,33 @@ public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packe
     private final Netty5Client client;
 
     @Override
-    protected void messageReceived(ChannelHandlerContext channelHandlerContext, Packet packet) throws Exception {
-        client.thisChannel().transmitter().call(packet, null);
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, Packet packet) {
+        client.packetTransmitter().call(packet, null);
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         ctx.channel().writeAndFlush(new AuthPacket(client.identity(), client.authProperty()));
+        client.thisChannel(new Netty5ClientChannel(client.identity(), ctx.channel(), client.packetTransmitter()));
         client.connectionState(Netty5Component.ConnectionState.CONNECTED);
-        client.thisChannel(new Netty5ClientChannel(client.identity(), ctx.channel(),
-                new Netty5ClientPacketTransmitter(
-                        client.bossGroup(),
-                        packet -> client.thisChannel().sendPacket(packet)
-                )));
         client.connectionFuture().complete(null);
+        super.channelActive(ctx);
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        if ((!ctx.channel().isActive() || !ctx.channel().isOpen() || !ctx.channel().isWritable())) {
-            client.connectionState(Netty5Component.ConnectionState.DISCONNECTED);
-            ctx.channel().close();
-        }
+        client.connectionLost();
+        super.channelInactive(ctx);
     }
 
     @Override
-    public void channelExceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        if (!(cause instanceof IOException)) {
-            if (cause.getMessage().equalsIgnoreCase("null")) return;
-            System.err.println("[client: " + client.identity().name() + "] Exception caught: " + cause.getMessage());
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        if (cause instanceof IOException) {
+            return;
+        }
+        System.err.println("[client: " + client.identity().name() + "] Exception caught: " + cause);
+        if (cause instanceof TooLongFrameException) {
+            ctx.close();
         }
     }
 }

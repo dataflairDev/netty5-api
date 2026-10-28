@@ -21,7 +21,7 @@ package de.dataflair.netty5.client;
 import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.common.packet.Netty5PacketTransmitter;
 import de.dataflair.netty5.common.packet.Packet;
-import io.netty5.channel.EventLoopGroup;
+import io.netty.channel.EventLoopGroup;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

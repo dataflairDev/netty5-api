@@ -3,13 +3,11 @@ package de.dataflair.netty5.common.codec;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import de.dataflair.netty5.Netty5ChannelUtils;
-import io.netty5.buffer.Buffer;
-import io.netty5.buffer.BufferAllocator;
-import io.netty5.buffer.DefaultBufferAllocators;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -19,36 +17,14 @@ import java.util.function.Supplier;
 /**
  * Represents a protocol buffer that can be used to read and write various data types.
  */
-public record CodecBuffer(@NotNull Buffer origin) {
+public record CodecBuffer(@NotNull ByteBuf origin) {
     /**
-     * The BUFFER_ALLOCATOR is a private static final variable that holds the instance
-     * of the BufferAllocator interface. It is initialized with the DefaultBufferAllocators.offHeapAllocator()
-     * implementation.
-     * <p>
-     * The BufferAllocator interface is responsible for providing memory management functionalities
-     * for buffer allocation. It abstracts the underlying memory allocation mechanism and provides
-     * a unified API to allocate buffers, such as byte arrays, off-heap memory blocks, etc.
-     * <p>
-     * This constant variable ensures that a single instance of BufferAllocator is used throughout
-     * the class. It is recommended to use a constant instance of the allocator to prevent
-     * unnecessary memory allocation overhead.
-     * <p>
-     * The BUFFER_ALLOCATOR variable is declared private to restrict its visibility within the class.
-     * Being declared as static, it belongs to the class itself rather than an instance of the class.
-     * Finally, the final modifier ensures that the value of the variable cannot be modified once
-     * it is assigned.
-     * <p>
-     * Example usage:
-     *   // Allocate a buffer of size 1024 bytes
-     *   ByteBuffer buffer = BUFFER_ALLOCATOR.allocate(1024);
-     * <p>
-     *   // Deallocate the buffer when it is no longer needed
-     *   BUFFER_ALLOCATOR.deallocate(buffer);
-     * <p>
-     *   // Retrieve the maximum buffer size that can be allocated
-     *   int maxBufferSize = BUFFER_ALLOCATOR.getMaxBufferSize();
+     * Buffers created by {@link #allocate()} are unpooled heap buffers. They are owned by the packet that
+     * created them and are reclaimed by the garbage collector, so a packet can be sent any number of times
+     * (for example to several channels) without manual reference counting. Network buffers (frames) are
+     * pooled and are released by the codec, see {@link PacketDecoder}.
      */
-    private static final BufferAllocator BUFFER_ALLOCATOR = DefaultBufferAllocators.offHeapAllocator();
+    private static final int INITIAL_CAPACITY = 64;
 
     /**
      * A list of BufferSerializer objects used for serialization and deserialization.
@@ -86,7 +62,7 @@ public record CodecBuffer(@NotNull Buffer origin) {
      * @return a newly allocated ProtocolBuffer object
      */
     public static CodecBuffer allocate() {
-        return new CodecBuffer(BUFFER_ALLOCATOR.allocate(0));
+        return new CodecBuffer(Unpooled.buffer(INITIAL_CAPACITY));
     }
 
     /**
@@ -99,7 +75,7 @@ public record CodecBuffer(@NotNull Buffer origin) {
     public void resetBuffer() {
         if (origin.readableBytes() > 0) {
             System.err.println("Buffer not empty! Skipping remaining bytes: " + origin.readableBytes());
-            origin.skipReadableBytes(origin.readableBytes());
+            origin.skipBytes(origin.readableBytes());
         }
     }
 
@@ -122,7 +98,11 @@ public record CodecBuffer(@NotNull Buffer origin) {
      * @return The String read from the ProtocolBuffer.
      */
     public String readString() {
-        return this.origin.readCharSequence(this.origin.readInt(), StandardCharsets.UTF_8).toString();
+        var length = this.origin.readInt();
+        if (length < 0 || length > this.origin.readableBytes()) {
+            throw new IndexOutOfBoundsException("Invalid string length " + length + " (readable: " + this.origin.readableBytes() + ")");
+        }
+        return this.origin.readCharSequence(length, StandardCharsets.UTF_8).toString();
     }
 
     /**
@@ -291,8 +271,13 @@ public record CodecBuffer(@NotNull Buffer origin) {
      */
     public CodecBuffer readBuffer() {
         var length = this.readInt(); // Length of the following buffer
-        var bufferSubsequence = this.origin.readBytes(ByteBuffer.allocateDirect(length)); // Subsequence of the origin buffer
-        return new CodecBuffer(bufferSubsequence);
+        if (length < 0 || length > this.origin.readableBytes()) {
+            throw new IndexOutOfBoundsException("Invalid buffer length " + length + " (readable: " + this.origin.readableBytes() + ")");
+        }
+        // independent heap copy of exactly the written subsequence; the origin advances past it
+        var subsequence = Unpooled.buffer(length);
+        this.origin.readBytes(subsequence, length);
+        return new CodecBuffer(subsequence);
     }
 
     /**
@@ -396,12 +381,12 @@ public record CodecBuffer(@NotNull Buffer origin) {
     }
 
     /**
-     * Writes the given {@link Buffer} bytes to the protocol buffer.
+     * Writes the given {@link ByteBuf} bytes to the protocol buffer.
      *
      * @param bytes the bytes to be written to the protocol buffer
      * @return the protocol buffer instance after writing the bytes
      */
-    public CodecBuffer writeBytes(Buffer bytes) {
+    public CodecBuffer writeBytes(ByteBuf bytes) {
         this.origin.writeBytes(bytes);
         return this;
     }
@@ -711,8 +696,11 @@ public record CodecBuffer(@NotNull Buffer origin) {
     @SuppressWarnings("unchecked")
     private <T> BufferSerializer<T> findSerializer(Class<T> clazz) {
         return (BufferSerializer<T>) bufferSerializers.stream()
-                .filter(serializer -> clazz.isAssignableFrom(serializer.getClass()))
+                .filter(serializer -> serializer.type() == clazz)
                 .findFirst()
+                .or(() -> bufferSerializers.stream()
+                        .filter(serializer -> serializer.type().isAssignableFrom(clazz))
+                        .findFirst())
                 .orElse(null);
     }
 

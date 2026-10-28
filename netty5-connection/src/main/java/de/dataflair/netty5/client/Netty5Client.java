@@ -22,10 +22,12 @@ import de.dataflair.netty5.Netty5ChannelInitializer;
 import de.dataflair.netty5.Netty5ChannelUtils;
 import de.dataflair.netty5.Netty5ClientChannel;
 import de.dataflair.netty5.Netty5Component;
-import io.netty5.bootstrap.Bootstrap;
-import io.netty5.channel.ChannelOption;
-import io.netty5.channel.SimpleChannelInboundHandler;
-import io.netty5.channel.epoll.Epoll;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.epoll.Epoll;
+import io.netty.util.concurrent.Future;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
@@ -34,17 +36,40 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Client that authenticates with an {@link de.dataflair.netty5.common.packet.auth.AuthPacket} and reconnects
+ * automatically, both after a failed connect and after a lost connection.
+ * <p>
+ * The {@link #packetTransmitter()} lives as long as the client, so listeners and responders registered on it
+ * survive reconnects. {@link #connectionFuture()} is replaced by a new, pending future when the connection is lost
+ * and completes when the next connection is established.
+ */
 @Getter
 public final class Netty5Client extends Netty5Component {
+    private static final AtomicInteger RECONNECT_THREAD_ID = new AtomicInteger();
+
     private final Netty5ClientChannel.Identity identity;
     private final Map<String, String> authProperty;
-    private final ScheduledExecutorService reconnectScheduler = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService reconnectScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        var thread = new Thread(runnable, "netty5-client-reconnect-" + RECONNECT_THREAD_ID.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final Netty5ClientPacketTransmitter packetTransmitter;
+    /**
+     * Delay between reconnect attempts in milliseconds.
+     */
     @Setter
-    private Netty5ClientChannel thisChannel;
-    private Bootstrap bootstrap;
+    private volatile long reconnectDelayMillis = 5_000;
+    @Setter
+    private volatile Netty5ClientChannel thisChannel;
+    private volatile Bootstrap bootstrap;
+    private volatile boolean shuttingDown;
 
     public Netty5Client(@NotNull String hostname,
                         int port,
@@ -53,25 +78,33 @@ public final class Netty5Client extends Netty5Component {
         super(0, hostname, port);
         this.identity = identity;
         this.authProperty = authProperty == null ? new HashMap<>() : authProperty;
+        this.packetTransmitter = new Netty5ClientPacketTransmitter(bossGroup(), packet -> {
+            var channel = this.thisChannel;
+            if (channel == null) {
+                throw new IllegalStateException("Client " + identity.name() + " is not connected");
+            }
+            channel.sendPacket(packet);
+        });
     }
 
     @Override
     public void initialize() throws Exception {
-         bootstrap = new Bootstrap()
+        var initializer = new Netty5ChannelInitializer(this.identity, maxFrameLength(), packetRegistry(), false) {
+            @Override
+            public SimpleChannelInboundHandler<?> handler() {
+                return new Netty5ClientHandler(Netty5Client.this);
+            }
+        };
+        bootstrap = new Bootstrap()
                 .group(bossGroup())
-                .channelFactory(Netty5ChannelUtils::createChannelFactory)
-                .handler(new Netty5ChannelInitializer(this.identity) {
-                    @Override
-                    public SimpleChannelInboundHandler<?> handler() {
-                        return new Netty5ClientHandler(Netty5Client.this);
-                    }
-                })
+                .channelFactory(Netty5ChannelUtils.createChannelFactory())
+                .handler(initializer)
                 .option(ChannelOption.AUTO_READ, true)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.IP_TOS, 24)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000);
 
-        if (Epoll.isTcpFastOpenClientSideAvailable()) {
+        if (Epoll.isAvailable() && Epoll.isTcpFastOpenClientSideAvailable()) {
             bootstrap.option(ChannelOption.TCP_FASTOPEN_CONNECT, true);
         }
 
@@ -79,22 +112,61 @@ public final class Netty5Client extends Netty5Component {
     }
 
     private void connect() {
-        bootstrap.connect(hostname(), port()).addListener(future -> {
-            if (future.isSuccess()) {
-                return;
-            }
-            scheduleReconnect();
-            this.connectionFuture(null);
-        });
+        if (shuttingDown || !isAlive()) {
+            return;
+        }
+        try {
+            bootstrap.connect(hostname(), port()).addListener((ChannelFutureListener) future -> {
+                if (future.isSuccess()) {
+                    return;
+                }
+                connectionState(ConnectionState.DISCONNECTED);
+                scheduleReconnect();
+            });
+        } catch (RejectedExecutionException e) {
+            // event loop group is shutting down
+        }
+    }
+
+    /**
+     * Called by the handler when an established connection is lost.
+     */
+    void connectionLost() {
+        connectionState(ConnectionState.DISCONNECTED);
+        if (connectionFuture().isDone()) {
+            connectionFuture(new CommunicationFuture<>());
+        }
+        scheduleReconnect();
     }
 
     private void scheduleReconnect() {
-        reconnectScheduler.schedule(() -> {
-            if (this.connectionState() == ConnectionState.DISCONNECTED ||
-                    this.connectionState() == ConnectionState.SEASON_CLOSED) {
-                System.out.println("Attempting to reconnect...");
-                connect();
-            }
-        }, 5, TimeUnit.SECONDS);
+        if (shuttingDown || !isAlive()) {
+            return;
+        }
+        try {
+            reconnectScheduler.schedule(() -> {
+                if (this.connectionState() == ConnectionState.DISCONNECTED ||
+                        this.connectionState() == ConnectionState.SEASON_CLOSED) {
+                    System.out.println("[client: " + identity.name() + "] Attempting to reconnect...");
+                    connect();
+                }
+            }, reconnectDelayMillis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            // scheduler already shut down
+        }
+    }
+
+    /**
+     * Stops reconnecting, closes the connection and shuts down the event loop group and the reconnect scheduler.
+     */
+    @Override
+    public Future<?> shutdownGracefully(long quietPeriod, long timeout, @NotNull TimeUnit unit) {
+        shuttingDown = true;
+        reconnectScheduler.shutdownNow();
+        var channel = this.thisChannel;
+        if (channel != null) {
+            channel.channel().close();
+        }
+        return super.shutdownGracefully(quietPeriod, timeout, unit);
     }
 }

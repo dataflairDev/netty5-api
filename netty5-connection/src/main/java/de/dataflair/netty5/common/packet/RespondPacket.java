@@ -25,6 +25,11 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
 
+/**
+ * Packet that is matched to its counterpart by a query id. The query id is read by the constructor; the payload is
+ * read by {@link #readBuffer(CodecBuffer)}, which is called by {@link PacketFactory} after construction and not
+ * from the constructor. Subclass field initialisers therefore never overwrite decoded values.
+ */
 @Setter
 @Getter
 public abstract class RespondPacket extends Packet implements CodecBuffer.WriteReadStream {
@@ -37,6 +42,10 @@ public abstract class RespondPacket extends Packet implements CodecBuffer.WriteR
     public RespondPacket(@NotNull CodecBuffer buffer) {
         super(buffer);
         this.queryId = buffer.readUniqueId();
+    }
+
+    @Override
+    protected void readContent(@NotNull CodecBuffer buffer) {
         this.readBuffer(buffer);
     }
 }

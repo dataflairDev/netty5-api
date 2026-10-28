@@ -19,7 +19,7 @@ package de.dataflair.netty5;
 import de.dataflair.netty5.client.Netty5ClientPacketTransmitter;
 import de.dataflair.netty5.common.codec.CodecBuffer;
 import de.dataflair.netty5.common.packet.Packet;
-import io.netty5.channel.Channel;
+import io.netty.channel.Channel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

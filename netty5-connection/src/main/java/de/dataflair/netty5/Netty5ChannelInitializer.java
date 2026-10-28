@@ -20,24 +20,49 @@ package de.dataflair.netty5;
 
 import de.dataflair.netty5.common.codec.PacketDecoder;
 import de.dataflair.netty5.common.codec.PacketEncoder;
-import io.netty5.channel.Channel;
-import io.netty5.channel.ChannelInitializer;
-import io.netty5.channel.SimpleChannelInboundHandler;
-import io.netty5.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty5.handler.codec.LengthFieldPrepender;
+import de.dataflair.netty5.common.codec.PacketRegistry;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channel> {
     private final Netty5ClientChannel.Identity identity;
+    private final int maxFrameLength;
+    private final PacketRegistry packetRegistry;
+    private final boolean requireAuthentication;
 
     public Netty5ChannelInitializer(Netty5ClientChannel.Identity identity) {
+        this(identity, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, null, false);
+    }
+
+    /**
+     * @param identity              identity used for log messages, may be null
+     * @param maxFrameLength        maximum accepted frame length in bytes; larger frames are rejected
+     * @param packetRegistry        registry used to resolve incoming packet classes, null for the default registry
+     * @param requireAuthentication if true only the auth packet is accepted until the channel is authenticated
+     */
+    public Netty5ChannelInitializer(@Nullable Netty5ClientChannel.Identity identity,
+                                    int maxFrameLength,
+                                    @Nullable PacketRegistry packetRegistry,
+                                    boolean requireAuthentication) {
+        if (maxFrameLength <= 0) {
+            throw new IllegalArgumentException("maxFrameLength must be positive: " + maxFrameLength);
+        }
         this.identity = identity;
+        this.maxFrameLength = maxFrameLength;
+        this.packetRegistry = packetRegistry == null ? new PacketRegistry() : packetRegistry;
+        this.requireAuthentication = requireAuthentication;
     }
 
     @Override
-    protected void initChannel(Channel channel) throws Exception {
+    protected void initChannel(@NotNull Channel channel) {
         channel.pipeline()
-                .addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, Integer.BYTES, 0, Integer.BYTES))
-                .addLast(new PacketDecoder(identity))
+                .addLast(new LengthFieldBasedFrameDecoder(maxFrameLength, 0, Integer.BYTES, 0, Integer.BYTES))
+                .addLast(new PacketDecoder(identity, packetRegistry, requireAuthentication))
                 .addLast(new LengthFieldPrepender(Integer.BYTES))
                 .addLast(new PacketEncoder(identity))
                 .addLast(handler());

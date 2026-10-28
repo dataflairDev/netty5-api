@@ -20,18 +20,20 @@ package de.dataflair.netty5;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import io.netty5.channel.EventLoop;
-import io.netty5.channel.MultithreadEventLoopGroup;
-import io.netty5.channel.ServerChannel;
-import io.netty5.channel.ServerChannelFactory;
-import io.netty5.channel.epoll.Epoll;
-import io.netty5.channel.epoll.EpollHandler;
-import io.netty5.channel.epoll.EpollServerSocketChannel;
-import io.netty5.channel.epoll.EpollSocketChannel;
-import io.netty5.channel.nio.NioHandler;
-import io.netty5.channel.socket.SocketChannel;
-import io.netty5.channel.socket.nio.NioServerSocketChannel;
-import io.netty5.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.ChannelFactory;
+import io.netty.channel.IoHandlerFactory;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.ReflectiveChannelFactory;
+import io.netty.channel.ServerChannel;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollIoHandler;
+import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.epoll.EpollSocketChannel;
+import io.netty.channel.nio.NioIoHandler;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.util.AttributeKey;
 import lombok.experimental.UtilityClass;
 import org.jetbrains.annotations.NotNull;
 
@@ -42,16 +44,35 @@ public class Netty5ChannelUtils {
     public final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
     public final UUID SYSTEM_UUID = UUID.fromString("0f0f0f0f-0f0f-0f0f-f0f0-0f0f0f0f0f0f");
 
-    public static @NotNull MultithreadEventLoopGroup createEventLoopGroup(int threads) {
-        return new MultithreadEventLoopGroup(threads, Epoll.isAvailable() ? EpollHandler.newFactory() : NioHandler.newFactory());
+    /**
+     * Default maximum frame length (16 MiB).
+     */
+    public final int DEFAULT_MAX_FRAME_LENGTH = 16 * 1024 * 1024;
+
+    /**
+     * Set on a server side child channel once the peer has been authenticated.
+     * The {@link de.dataflair.netty5.common.codec.PacketDecoder} only accepts the auth packet until it is set.
+     */
+    public final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("netty5-api.authenticated");
+
+    public static @NotNull MultiThreadIoEventLoopGroup createEventLoopGroup(int threads) {
+        return new MultiThreadIoEventLoopGroup(threads, ioHandlerFactory());
     }
 
-    public static @NotNull SocketChannel createChannelFactory(EventLoop loop) {
-        return Epoll.isAvailable() ? new EpollSocketChannel(loop) : new NioSocketChannel(loop);
+    public static @NotNull IoHandlerFactory ioHandlerFactory() {
+        return Epoll.isAvailable() ? EpollIoHandler.newFactory() : NioIoHandler.newFactory();
     }
 
-    public static ServerChannelFactory<? extends ServerChannel> buildChannelFactory() {
-        return Epoll.isAvailable() ? EpollServerSocketChannel::new : NioServerSocketChannel::new;
+    public static @NotNull ChannelFactory<? extends SocketChannel> createChannelFactory() {
+        return Epoll.isAvailable()
+                ? new ReflectiveChannelFactory<>(EpollSocketChannel.class)
+                : new ReflectiveChannelFactory<>(NioSocketChannel.class);
+    }
+
+    public static @NotNull ChannelFactory<? extends ServerChannel> buildChannelFactory() {
+        return Epoll.isAvailable()
+                ? new ReflectiveChannelFactory<>(EpollServerSocketChannel.class)
+                : new ReflectiveChannelFactory<>(NioServerSocketChannel.class);
     }
 
 }
