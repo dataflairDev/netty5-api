@@ -71,6 +71,31 @@ public final class SafeLog {
         return window.allow(System.currentTimeMillis());
     }
 
+    /**
+     * @return a throttle for log lines that do not belong to a channel, allowing {@link #LINES_PER_WINDOW} lines
+     * per {@link #WINDOW_MILLIS}
+     */
+    public static @NotNull Throttle throttle() {
+        return new Throttle();
+    }
+
+    /**
+     * Thread-safe log throttle that is not bound to a channel.
+     */
+    public static final class Throttle {
+        private final Window window = new Window();
+
+        private Throttle() {
+        }
+
+        /**
+         * @return true if one more line may be logged in the current window
+         */
+        public boolean allow() {
+            return window.allow(System.currentTimeMillis());
+        }
+    }
+
     private static final class Window {
         private long start;
         private int lines;

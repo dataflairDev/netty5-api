@@ -29,6 +29,8 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      */
     private static final int INITIAL_CAPACITY = 64;
     private static final Logger LOGGER = LoggerFactory.getLogger(CodecBuffer.class);
+    // the content is chosen by the peer: a flood of broken packets must not flood the log
+    private static final SafeLog.Throttle LOG_THROTTLE = SafeLog.throttle();
     /**
      * Default maximum length in bytes of a JSON document read by {@link #readJsonObject()} (1 MiB).
      */
@@ -82,7 +84,9 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      */
     public void resetBuffer() {
         if (origin.readableBytes() > 0) {
-            LOGGER.warn("Buffer not empty, skipping remaining {} bytes", origin.readableBytes());
+            if (LOG_THROTTLE.allow()) {
+                LOGGER.warn("Buffer not empty, skipping remaining {} bytes", origin.readableBytes());
+            }
             origin.skipBytes(origin.readableBytes());
         }
     }
@@ -765,14 +769,18 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
     public <T> T readBySerializer(@NotNull Class<T> clazz) {
         BufferSerializer<T> serializer = findSerializer(clazz);
         if (serializer == null) {
-            LOGGER.warn("No serializer found for class {}", clazz.getName());
+            if (LOG_THROTTLE.allow()) {
+                LOGGER.warn("No serializer found for class {}", clazz.getName());
+            }
             return null;
         }
 
         try {
             return serializer.readFromBuffer(this);
         } catch (Exception e) {
-            LOGGER.warn("Error when reading an object of class {}: {}", clazz.getName(), SafeLog.clean(e));
+            if (LOG_THROTTLE.allow()) {
+                LOGGER.warn("Error when reading an object of class {}: {}", clazz.getName(), SafeLog.clean(e));
+            }
             return null;
         }
     }
