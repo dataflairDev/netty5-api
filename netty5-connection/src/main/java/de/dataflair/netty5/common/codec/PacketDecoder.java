@@ -106,11 +106,15 @@ public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
                     + ", skipping " + frame.readableBytes() + " bytes");
         }
 
+        final Object packet;
         try {
-            out.add(PacketFactory.create(packetClass, new CodecBuffer(content)));
+            packet = PacketFactory.create(packetClass, new CodecBuffer(content));
         } catch (ReflectiveOperationException | RuntimeException e) {
             throw new PacketRejectedException(prefix() + "Error while decoding packet " + className, e);
         }
+        // rewind so a received packet can be forwarded unchanged
+        content.readerIndex(0);
+        out.add(packet);
     }
 
     private static boolean isAuthenticated(ChannelHandlerContext ctx) {
