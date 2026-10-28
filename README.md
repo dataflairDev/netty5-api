@@ -104,12 +104,12 @@ server.maxFrameLength(1024 * 1024);      // default 16 MiB
 server.preAuthMaxFrameLength(16 * 1024); // default 64 KiB
 server.authTimeoutMillis(5_000);         // default 10 s
 
-// the token is bound to the name the client claims and compared in constant time
-var tokensByName = Map.of("demo-client", System.getenv("NETTY5_DEMO_TOKEN"));
+// the token is bound to the canonical form of the claimed name and compared in constant time
+var tokensByName = Map.of(Netty5Identities.canonicalName("demo-client"), System.getenv("NETTY5_DEMO_TOKEN"));
 server.addFilter(new ConnectionFilter() {
     @Override
     public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
-        var expected = tokensByName.get(auth.clientChannel().identity().name());
+        var expected = tokensByName.get(auth.canonicalName());
         return expected != null
                 && ConnectionFilters.tokenEquals(expected, auth.authProperty().get("token")); // false closes
     }
@@ -134,8 +134,8 @@ server.connectionFuture().get(5, TimeUnit.SECONDS); // bound (or failed)
 `initialize()` throws an `IllegalStateException` if neither a `ConnectionFilter` nor an `AsyncConnectionFilter`
 is registered. A server that really should accept everybody has to say so with `server.allowAnonymous(true)`.
 
-`server.connections()` holds the authenticated clients; `firstChannel(name)` and `clientChannel(uuid)` look one
-up. The server sends to a client with `channel.sendPacket(...)` and queries it through the channel's transmitter,
+`server.connections()` holds the authenticated clients; `firstChannel(name)` (canonical name) and
+`clientChannel(uuid)` (effective UUID, see [Identity](#identity)) look one up. The server sends to a client with `channel.sendPacket(...)` and queries it through the channel's transmitter,
 `channel.transmitter().queryPacket(...)`. `server.packetTransmitter()` itself has no single peer, its query
 methods throw `UnsupportedOperationException`.
 
@@ -160,9 +160,31 @@ client.connectionFuture().get(5, TimeUnit.SECONDS);
 ```
 
 `connectionFuture()` completes when the TCP connection (and, with TLS, the handshake) is up and the
-`AuthPacket` has been written. There is no
-acknowledgement of the authentication: a rejected client is disconnected and keeps reconnecting
-(`reconnectDelayMillis`, default 5 s) until it is shut down.
+`AuthPacket` has been written. `authenticationFuture()` completes when the server has accepted the client; it
+yields the identity the server uses (`effectiveIdentity()`). A rejected client is disconnected and keeps
+reconnecting (`reconnectDelayMillis`, default 5 s) until it is shut down.
+
+After authentication the client sends a `KeepAlivePacket` whenever it has written nothing for
+`keepAliveIntervalMillis` (default 60 s, `0` disables it), so the server's idle timeout does not close a quiet
+connection. Keep it below the server's `idleTimeoutMillis`. A client that sends a lot should check
+`client.isWritable()` (or `channel.isWritable()`) and wait while it is false; above `maxOutboundBufferBytes`
+pending bytes the connection is closed.
+
+### Identity
+
+- The server does not trust the UUID a client sends. It derives the UUID from the **canonical name**:
+  `Netty5Identities.derivedUuid(name)` = `UUID.nameUUIDFromBytes("netty5-api:identity:" + canonicalName(name))`.
+  `server.clientChannel(uuid)` therefore finds a client by this derived UUID; the client gets it from the
+  `AuthAcceptedPacket` (`client.effectiveIdentity()`), or computes it with `Netty5Identities.derivedUuid`.
+- The canonical name is `Netty5Identities.canonicalName(name)`: Unicode NFKC, then `toLowerCase(Locale.ROOT)`.
+  `ſam`, `Sam` and `SAM` are one identity, the Kelvin sign in `\u212Aevin` becomes `kevin`, and the result does
+  not depend on the default locale. `İlker` stays distinct from `ilker` (its canonical form keeps the combining
+  dot). The conflict check of the `identityPolicy`, `clientChannel(name)` and `firstChannel(name)` all use it.
+- **The filter has to check the canonical name against the token** (`auth.canonicalName()`, as in the server
+  example), so a token issued for one name works for every spelling of it and for nothing else.
+- `server.trustClientUuid(true)` makes the server use the UUID from the `AuthPacket`. Then any client with a valid
+  token could claim (`REPLACE_OLD`) or block (`REJECT`) the UUID of another one, so **the filter must also check
+  that the client may use that UUID**.
 
 ### Publish and query
 
@@ -218,10 +240,11 @@ falls back to a built-in token and logs a warning.
   loaded or constructed (including `ExceptionInInitializerError` and `StackOverflowError`) closes the connection.
 - **Authentication and identity.** Until an `AuthPacket` has passed all filters, every other packet closes the
   connection, and connections that do not authenticate within `authTimeoutMillis` (default 10 s) are closed. Only
-  the first `AuthPacket` of a connection is evaluated. The filter decides which identity a client may use: bind
-  the token to the claimed name (see the server example) and compare it with `ConnectionFilters.tokenEquals`. A
-  second connection with the name (case-insensitive) or UUID of an authenticated one is rejected by default;
-  `identityPolicy(IdentityPolicy.REPLACE_OLD)` closes the old connection instead.
+  the first `AuthPacket` of a connection is evaluated, later ones count as rejected packets. The filter decides
+  which identity a client may use: bind the token to the canonical name (see [Identity](#identity)) and compare
+  it with `ConnectionFilters.tokenEquals`. A second connection with the canonical name or effective UUID of an
+  authenticated one is rejected by default; `identityPolicy(IdentityPolicy.REPLACE_OLD)` closes the old
+  connection instead.
 - **Authorization.** The library does not know which packets a client may send. Check this in a
   `PacketReceiveFilter` (sender and packet). A response that does not answer a pending request is dropped and
   never reaches a listener.
@@ -229,20 +252,32 @@ falls back to a built-in token and logs a warning.
   - Frames: `maxFrameLength` (default 16 MiB) after authentication, `preAuthMaxFrameLength` (default 64 KiB)
     before. The pre-auth limit is checked as soon as the length field arrives, so an unauthenticated peer cannot
     make the server buffer more than that. An `AuthPacket` carries at most 256 properties.
-  - Connections: `maxConnections` (default 10000) and `maxConnectionsPerAddress` (default 64), checked by the
-    first handler of every connection; `backlog` sets `SO_BACKLOG` (default 1024).
-  - Failed logins: `maxAuthFailuresPerMinute` (default 10) per remote address; after that the address is
-    rejected until its budget has refilled.
-  - Rejected packets: after `maxRejectedPackets` (default 16) decode errors or filter rejections an
-    authenticated connection is closed.
-  - Idle connections: `idleTimeoutMillis` (default 5 min) closes an authenticated connection without traffic;
-    `0` disables it with a warning. `authTimeoutMillis <= 0` is allowed but logged as a warning.
+  - Connections: `maxConnections` (default 10000), `maxUnauthenticatedConnections` (default 512) and
+    `maxConnectionsPerAddress` (default 64 per prefix), checked by the first handler of every connection;
+    `backlog` sets `SO_BACKLOG` (default 1024).
+  - New connections: `maxNewConnectionsPerPrefix` per `newConnectionWindowMillis` (default 30 per 10 s, token
+    bucket; `0` disables it).
+  - Authentication attempts: `maxAuthFailuresPerMinute` (default 10) per prefix. Every attempt takes a token when
+    it starts and gives it back on success, so parallel guesses are limited too; failed or timed out TLS
+    handshakes cost a token as well. A prefix without tokens is closed right away until its budget has refilled.
+  - Prefixes: IPv4 per address, IPv6 per `ipv6PrefixLength` bits (default /64). Each limiter tracks at most
+    `maxTrackedPrefixes` (default 100000, least recently used dropped first); refilled prefixes are removed every
+    10 s.
+  - Rejected packets: after `maxRejectedPackets` (default 16, server and client) decode errors, filter
+    rejections or duplicate `AuthPacket`s a connection is closed.
+  - Idle connections: `idleTimeoutMillis` (default 5 min) closes an authenticated connection from which the
+    server received nothing, its own writes do not count; `0` disables it with a warning. The client's
+    keep-alive (`keepAliveIntervalMillis`, default 60 s) keeps a quiet but healthy client connected; the server
+    drops `KeepAlivePacket`s before any filter or listener. `authTimeoutMillis <= 0` is allowed but logged as a
+    warning.
   - Deserialisation: `CodecBuffer.readList`/`readMap` check the announced size against the readable bytes, stop
     if an element consumes no byte and have overloads with a `maxSize`; `readEnum` checks the ordinal;
     `readJsonObject()` reads at most 1 MiB (`readJsonObject(maxLength)` for other limits).
-- **Backpressure.** `writeBufferWaterMark` (default 32/64 KiB) controls when a connection becomes unwritable;
-  while it is, the library stops reading from it. If the pending bytes still exceed `maxOutboundBufferBytes`
-  (default 8 MiB) the connection is closed.
+- **Backpressure.** `writeBufferWaterMark` (default 32/64 KiB) controls when a connection becomes unwritable
+  (`isWritable()`); packets queued from other threads are counted with their content size. While a server
+  connection is unwritable the server stops reading from it; the client keeps reading, so two peers that both
+  send a lot cannot block each other. If the pending bytes exceed `maxOutboundBufferBytes` (default 8 MiB) the
+  connection is closed.
 - **TLS.** Without `sslContext` the connection is plain TCP and the auth properties travel in clear text; the
   server logs a warning when it binds a non-loopback address without TLS. With a server `SslContext` the
   `SslHandler` is the first handler that sees the bytes, and the handshake timeout (`handshakeTimeoutMillis`,
