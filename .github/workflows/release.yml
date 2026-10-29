@@ -1,0 +1,142 @@
+# Builds netty-connection for a version tag and publishes the jars as a GitHub Release.
+# If the Maven Central secrets are configured, the same version is also released to Maven Central.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, e.g. v2.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  github-release:
+    runs-on: ubuntu-latest
+    outputs:
+      central: ${{ steps.central.outputs.enabled }}
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - name: Set up Temurin 27
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "27"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Check tag against VERSION_NAME
+        id: version
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::tag '$TAG' is not of the form vX.Y.Z"
+            exit 1
+          fi
+          tag_version="${BASH_REMATCH[1]}"
+          version_name="$(sed -n 's/^VERSION_NAME=//p' gradle.properties | tr -d '\r[:space:]')"
+          if [ "$tag_version" != "$version_name" ]; then
+            echo "::error::tag $TAG does not match VERSION_NAME=$version_name in gradle.properties"
+            exit 1
+          fi
+          echo "version=$version_name" >> "$GITHUB_OUTPUT"
+
+      # "build" runs the full test suite but does not assemble the javadoc jar of the
+      # maven-publish plugin, so plainJavadocJar is requested explicitly.
+      - name: Build and test
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build :netty-connection:plainJavadocJar
+
+      - name: Collect release assets
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          libs=netty-connection/build/libs
+          mkdir dist
+          for f in "netty-connection-$VERSION.jar" \
+                   "netty-connection-$VERSION-sources.jar" \
+                   "netty-connection-$VERSION-javadoc.jar"; do
+            test -f "$libs/$f" || { echo "::error::missing $libs/$f"; exit 1; }
+            cp "$libs/$f" dist/
+          done
+          cp LICENSE NOTICE dist/
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          ls -l dist
+          cat dist/SHA256SUMS
+
+      - name: Extract release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash .github/scripts/release-notes.sh "$VERSION" CHANGELOG.md > release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --verify-tag \
+            --title "netty-connection $VERSION" \
+            --notes-file release-notes.md
+
+      - name: Check for Maven Central secrets
+        id: central
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+        run: |
+          if [ -n "$MAVEN_CENTRAL_USERNAME" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "MAVEN_CENTRAL_USERNAME is not set, Maven Central is skipped"
+          fi
+
+  maven-central:
+    needs: github-release
+    if: needs.github-release.outputs.central == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - name: Set up Temurin 27
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "27"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Publish and release to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_IN_MEMORY_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew publishAndReleaseToMavenCentral
