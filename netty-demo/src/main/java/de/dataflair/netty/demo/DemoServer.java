@@ -68,7 +68,7 @@ public final class DemoServer {
         tokensByName.forEach((name, token) -> allowed.put(NettyIdentities.canonicalName(name), token));
         server.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(NettyClientChannel.AuthType auth) {
+            public boolean evaluateFilter(NettyClientChannel.@NotNull AuthType auth) {
                 var name = auth.clientChannel().identity().name();
                 var expected = allowed.get(auth.canonicalName());
                 var accepted = expected != null

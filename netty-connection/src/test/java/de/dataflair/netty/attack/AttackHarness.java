@@ -9,6 +9,7 @@ import de.dataflair.netty.server.NettyServer;
 import de.dataflair.netty.testpackets.TestPacket;
 import de.dataflair.netty.testpackets.TestRequestPacket;
 import de.dataflair.netty.testpackets.TestRespondPacket;
+import org.jspecify.annotations.NonNull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -83,7 +84,7 @@ final class AttackHarness {
 
         server.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(NettyClientChannel.AuthType auth) {
+            public boolean evaluateFilter(NettyClientChannel.@NonNull AuthType auth) {
                 return TOKEN.equals(auth.authProperty().get("token"));
             }
         });

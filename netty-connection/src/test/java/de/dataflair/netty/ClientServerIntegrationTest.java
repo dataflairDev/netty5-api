@@ -10,6 +10,7 @@ import de.dataflair.netty.server.NettyServer;
 import de.dataflair.netty.testpackets.TestPacket;
 import de.dataflair.netty.testpackets.TestRequestPacket;
 import de.dataflair.netty.testpackets.TestRespondPacket;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -219,7 +220,7 @@ class ClientServerIntegrationTest {
     void rejectedConnectionIsClosed() throws Exception {
         var server = startServer(0, s -> s.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(NettyClientChannel.AuthType object) {
+            public boolean evaluateFilter(NettyClientChannel.@NonNull AuthType object) {
                 return false;
             }
         }));
