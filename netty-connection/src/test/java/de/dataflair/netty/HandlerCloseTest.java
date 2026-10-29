@@ -1,12 +1,12 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
-import de.dataflair.netty5.client.Netty5Client;
-import de.dataflair.netty5.client.Netty5ClientHandler;
-import de.dataflair.netty5.common.codec.PacketRegistry;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.server.Netty5ServerHandler;
+import de.dataflair.netty.client.NettyClient;
+import de.dataflair.netty.client.NettyClientHandler;
+import de.dataflair.netty.common.codec.PacketRegistry;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.server.NettyServerHandler;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -26,22 +26,22 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class HandlerCloseTest {
 
-    private static EmbeddedChannel serverChannel(Netty5Server server) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
-                Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true) {
+    private static EmbeddedChannel serverChannel(NettyServer server) {
+        return new EmbeddedChannel(new NettyChannelInitializer(null, NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
+                NettyChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
-                return new Netty5ServerHandler(server);
+                return new NettyServerHandler(server);
             }
         });
     }
 
-    private static EmbeddedChannel clientChannel(Netty5Client client) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
+    private static EmbeddedChannel clientChannel(NettyClient client) {
+        return new EmbeddedChannel(new NettyChannelInitializer(null, NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
                 new PacketRegistry().allowAnyPacketClass(), false) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
-                return new Netty5ClientHandler(client);
+                return new NettyClientHandler(client);
             }
         });
     }
@@ -67,7 +67,7 @@ class HandlerCloseTest {
      * Encodes the packet with a separate codec and feeds the bytes into the given channel.
      */
     private static void feed(EmbeddedChannel target, Packet packet) {
-        var encoder = new EmbeddedChannel(new Netty5ChannelInitializer(null) {
+        var encoder = new EmbeddedChannel(new NettyChannelInitializer(null) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new SimpleChannelInboundHandler<Packet>() {
@@ -87,7 +87,7 @@ class HandlerCloseTest {
 
     @Test
     void serverClosesOnNegativeLengthField() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         try {
             var unauthenticated = serverChannel(server);
             unauthenticated.writeInbound(negativeLengthField());
@@ -95,8 +95,8 @@ class HandlerCloseTest {
             unauthenticated.finishAndReleaseAll();
 
             var authenticated = serverChannel(server);
-            feed(authenticated, new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
-            assertEquals(Boolean.TRUE, authenticated.attr(Netty5ChannelUtils.AUTHENTICATED).get());
+            feed(authenticated, new AuthPacket(new NettyClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
+            assertEquals(Boolean.TRUE, authenticated.attr(NettyChannelUtils.AUTHENTICATED).get());
             authenticated.writeInbound(negativeLengthField());
             assertFalse(authenticated.isOpen(), "authenticated channel must be closed after a framing error");
             authenticated.finishAndReleaseAll();
@@ -107,10 +107,10 @@ class HandlerCloseTest {
 
     @Test
     void serverKeepsAuthenticatedChannelOnRejectedPacket() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         try {
             var authenticated = serverChannel(server);
-            feed(authenticated, new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
+            feed(authenticated, new AuthPacket(new NettyClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
             authenticated.writeInbound(unknownClassFrame());
             assertTrue(authenticated.isOpen(), "a rejected packet after authentication keeps the channel open");
             authenticated.finishAndReleaseAll();
@@ -121,7 +121,7 @@ class HandlerCloseTest {
 
     @Test
     void clientClosesOnNegativeLengthFieldButKeepsChannelOnRejectedPacket() throws Exception {
-        var client = new Netty5Client("127.0.0.1", 1, new Netty5ClientChannel.Identity("c", UUID.randomUUID()), null);
+        var client = new NettyClient("127.0.0.1", 1, new NettyClientChannel.Identity("c", UUID.randomUUID()), null);
         try {
             var rejected = clientChannel(client);
             rejected.writeInbound(unknownClassFrame());
@@ -141,7 +141,7 @@ class HandlerCloseTest {
      */
     @Test
     void connectionFutureIsNotReplacedOnShutdown() throws Exception {
-        var client = new Netty5Client("127.0.0.1", 1, new Netty5ClientChannel.Identity("c", UUID.randomUUID()), null);
+        var client = new NettyClient("127.0.0.1", 1, new NettyClientChannel.Identity("c", UUID.randomUUID()), null);
         var channel = clientChannel(client);
         var connected = client.connectionFuture();
         assertTrue(connected.isDone(), "channelActive completes the connection future");
@@ -158,7 +158,7 @@ class HandlerCloseTest {
      */
     @Test
     void connectionFutureIsReplacedOnConnectionLoss() throws Exception {
-        var client = new Netty5Client("127.0.0.1", 1, new Netty5ClientChannel.Identity("c", UUID.randomUUID()), null);
+        var client = new NettyClient("127.0.0.1", 1, new NettyClientChannel.Identity("c", UUID.randomUUID()), null);
         try {
             var channel = clientChannel(client);
             var connected = client.connectionFuture();

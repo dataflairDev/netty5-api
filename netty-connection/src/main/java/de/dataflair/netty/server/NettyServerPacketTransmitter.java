@@ -1,9 +1,9 @@
-package de.dataflair.netty5.server;
+package de.dataflair.netty.server;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@ package de.dataflair.netty5.server;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.TriConsumer;
-import de.dataflair.netty5.common.packet.*;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.TriConsumer;
+import de.dataflair.netty.common.packet.*;
 import io.netty.channel.EventLoopGroup;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -36,13 +36,13 @@ import java.util.function.Consumer;
  * e.g. {@code server.clientChannel(uuid).transmitter().queryPacket(...)}; responses from that client are routed
  * back to it.
  */
-public final class Netty5ServerPacketTransmitter extends Netty5PacketTransmitter {
+public final class NettyServerPacketTransmitter extends NettyPacketTransmitter {
     private static final String UNSUPPORTED = "The server transmitter has no single peer; query a client through "
             + "its channel: server.clientChannel(...).transmitter().queryPacket(...)";
 
     private final TriConsumer<RequestPacket, Class<Packet>, Consumer<Packet>> requestPacketConsumer;
 
-    public Netty5ServerPacketTransmitter(EventLoopGroup eventExecutors,
+    public NettyServerPacketTransmitter(EventLoopGroup eventExecutors,
                                          Consumer<Packet> packetConsumer,
                                          TriConsumer<RequestPacket, Class<Packet>, Consumer<Packet>> requestPacketConsumer) {
         super(eventExecutors, packetConsumer);
@@ -73,7 +73,7 @@ public final class Netty5ServerPacketTransmitter extends Netty5PacketTransmitter
         throw new UnsupportedOperationException(UNSUPPORTED);
     }
 
-    public <R extends RequestPacket> void callResponder(@NotNull R request, @NotNull Netty5ClientChannel sender) {
+    public <R extends RequestPacket> void callResponder(@NotNull R request, @NotNull NettyClientChannel sender) {
         var registered = responders().get(request.getClass());
         if (registered != null) {
             registered.forEach((_, respondPacketFunction) ->
@@ -84,7 +84,7 @@ public final class Netty5ServerPacketTransmitter extends Netty5PacketTransmitter
     }
 
     @Override
-    public void call(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
+    public void call(@NotNull Packet packet, @Nullable NettyClientChannel sender) {
         if (packet instanceof RespondPacket respondPacket) {
             // responses to requests sent through a client channel's transmitter
             var completed = sender != null && sender.transmitter() != null
@@ -114,6 +114,6 @@ public final class Netty5ServerPacketTransmitter extends Netty5PacketTransmitter
     }
 
     @Override
-    public void callActions(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
+    public void callActions(@NotNull Packet packet, @Nullable NettyClientChannel sender) {
     }
 }

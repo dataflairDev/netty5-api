@@ -1,4 +1,4 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
 /*
  * MIT License
@@ -24,17 +24,17 @@ package de.dataflair.netty5.common.codec;
  * SOFTWARE.
  */
 
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.common.packet.PacketFactory;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.common.packet.PacketFactory;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.MessageToMessageDecoder;
-import de.dataflair.netty5.common.log.SafeLog;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.common.log.SafeLog;
+import de.dataflair.netty.common.packet.Packet;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +51,7 @@ import java.util.List;
  * <p>
  * The class named in the frame is resolved through the {@link PacketRegistry} without initialisation and is
  * only instantiated if it is a concrete packet class. If {@code requireAuthentication} is set, any packet other
- * than {@link AuthPacket} is rejected (and the channel closed) until {@link Netty5ChannelUtils#AUTHENTICATED}
+ * than {@link AuthPacket} is rejected (and the channel closed) until {@link NettyChannelUtils#AUTHENTICATED}
  * is set on the channel. Before authentication no class other than the auth packet is even loaded, and a frame
  * longer than {@code preAuthMaxFrameLength} (including the length field) closes the channel.
  * <p>
@@ -67,26 +67,26 @@ public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
     private static final Logger LOGGER = LoggerFactory.getLogger(PacketDecoder.class);
     private static final String AUTH_PACKET_NAME = AuthPacket.class.getName();
 
-    private final Netty5ClientChannel.Identity identity;
+    private final NettyClientChannel.Identity identity;
     private final PacketRegistry packetRegistry;
     private final boolean requireAuthentication;
     private final int preAuthMaxFrameLength;
 
-    public PacketDecoder(@Nullable Netty5ClientChannel.Identity identity) {
+    public PacketDecoder(@Nullable NettyClientChannel.Identity identity) {
         this(identity, null, false);
     }
 
-    public PacketDecoder(@Nullable Netty5ClientChannel.Identity identity,
+    public PacketDecoder(@Nullable NettyClientChannel.Identity identity,
                          @Nullable PacketRegistry packetRegistry,
                          boolean requireAuthentication) {
-        this(identity, packetRegistry, requireAuthentication, Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH);
+        this(identity, packetRegistry, requireAuthentication, NettyChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH);
     }
 
     /**
      * @param preAuthMaxFrameLength maximum frame length in bytes (including the length field) before
      *                              authentication; only used if {@code requireAuthentication} is set
      */
-    public PacketDecoder(@Nullable Netty5ClientChannel.Identity identity,
+    public PacketDecoder(@Nullable NettyClientChannel.Identity identity,
                          @Nullable PacketRegistry packetRegistry,
                          boolean requireAuthentication,
                          int preAuthMaxFrameLength) {
@@ -171,7 +171,7 @@ public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
     }
 
     private static boolean isAuthenticated(ChannelHandlerContext ctx) {
-        return Boolean.TRUE.equals(ctx.channel().attr(Netty5ChannelUtils.AUTHENTICATED).get());
+        return Boolean.TRUE.equals(ctx.channel().attr(NettyChannelUtils.AUTHENTICATED).get());
     }
 
     private String prefix() {

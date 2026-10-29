@@ -1,7 +1,7 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.testpackets.TestPacket;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Attack 8 - repeated post-auth error frames.
  * <p>
- * Defence: after {@link Netty5Server#DEFAULT_MAX_REJECTED_PACKETS} rejected packets the server closes the
+ * Defence: after {@link NettyServer#DEFAULT_MAX_REJECTED_PACKETS} rejected packets the server closes the
  * connection, and log lines are throttled per channel, so one logged-in peer can neither keep the connection
  * nor flood the log.
  */

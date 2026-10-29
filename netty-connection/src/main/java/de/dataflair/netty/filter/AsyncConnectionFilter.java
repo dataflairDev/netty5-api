@@ -1,6 +1,6 @@
-package de.dataflair.netty5.filter;
+package de.dataflair.netty.filter;
 
-import de.dataflair.netty5.Netty5ClientChannel;
+import de.dataflair.netty.NettyClientChannel;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletionStage;
@@ -23,5 +23,5 @@ public abstract class AsyncConnectionFilter {
      *
      * @return a stage completing with {@code true} to accept the connection
      */
-    public abstract @NotNull CompletionStage<Boolean> evaluateAsync(@NotNull Netty5ClientChannel.AuthType auth);
+    public abstract @NotNull CompletionStage<Boolean> evaluateAsync(@NotNull NettyClientChannel.AuthType auth);
 }

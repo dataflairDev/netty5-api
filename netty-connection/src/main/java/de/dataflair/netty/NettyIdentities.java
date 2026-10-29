@@ -1,4 +1,4 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -13,17 +13,17 @@ import java.util.UUID;
  * The server compares, looks up and derives UUIDs only from the canonical form of a name: Unicode NFKC followed
  * by {@code toLowerCase(Locale.ROOT)}. So {@code "ſam"} and {@code "Sam"} are the same identity ({@code "sam"}),
  * the Kelvin sign {@code "Kevin"} is {@code "kevin"}, and the result does not depend on the default locale.
- * A {@link de.dataflair.netty5.filter.ConnectionFilter} that binds a token to a name has to check the token
- * against {@link #canonicalName(String)} (or {@link Netty5ClientChannel.AuthType#canonicalName()}), otherwise
+ * A {@link de.dataflair.netty.filter.ConnectionFilter} that binds a token to a name has to check the token
+ * against {@link #canonicalName(String)} (or {@link NettyClientChannel.AuthType#canonicalName()}), otherwise
  * two spellings of one canonical name could end up with different tokens.
  */
-public final class Netty5Identities {
+public final class NettyIdentities {
     /**
      * Fixed prefix of the bytes a UUID is derived from, see {@link #derivedUuid(String)}.
      */
-    public static final String UUID_NAMESPACE = "netty5-api:identity:";
+    public static final String UUID_NAMESPACE = "netty-api:identity:";
 
-    private Netty5Identities() {
+    private NettyIdentities() {
     }
 
     /**

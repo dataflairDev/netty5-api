@@ -1,7 +1,7 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.testpackets.TestPacket;
 import io.netty.buffer.Unpooled;
 import org.junit.jupiter.api.Test;
 

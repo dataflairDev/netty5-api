@@ -1,7 +1,7 @@
-package de.dataflair.netty5.testpackets;
+package de.dataflair.netty.testpackets;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.Packet;
 
 public class PreAuthProbePacket extends Packet {
     static {

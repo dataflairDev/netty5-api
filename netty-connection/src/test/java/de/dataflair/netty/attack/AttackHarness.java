@@ -1,14 +1,14 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.actions.ConnectionAction;
-import de.dataflair.netty5.common.codec.PacketRegistry;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.filter.ConnectionFilter;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.testpackets.TestPacket;
-import de.dataflair.netty5.testpackets.TestRequestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.actions.ConnectionAction;
+import de.dataflair.netty.common.codec.PacketRegistry;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.filter.ConnectionFilter;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestRequestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Builds a server configured like {@code netty5-demo} (token filter via a {@link ConnectionFilter}, allowlist
+ * Builds a server configured like {@code netty-demo} (token filter via a {@link ConnectionFilter}, allowlist
  * registry) and provides helpers that craft raw wire frames by hand, so the attack tests can hit the real server
  * with a plain {@link Socket}.
  * <p>
@@ -40,13 +40,13 @@ import java.util.concurrent.TimeUnit;
 final class AttackHarness {
     static final String TOKEN = "attack-secret";
 
-    private final Netty5Server server;
+    private final NettyServer server;
     private final int port;
     // must be the SAME instance the CLIENT_AUTHENTICATED action writes to
-    private final Map<String, CompletableFuture<Netty5ClientChannel>> authenticated;
+    private final Map<String, CompletableFuture<NettyClientChannel>> authenticated;
 
-    private AttackHarness(Netty5Server server, int port,
-                          Map<String, CompletableFuture<Netty5ClientChannel>> authenticated) {
+    private AttackHarness(NettyServer server, int port,
+                          Map<String, CompletableFuture<NettyClientChannel>> authenticated) {
         this.server = server;
         this.port = port;
         this.authenticated = authenticated;
@@ -70,10 +70,10 @@ final class AttackHarness {
      * @param config applied after the default configuration, before {@code initialize()}
      */
     static AttackHarness start(boolean echo, long authTimeoutMillis,
-                               java.util.function.Consumer<Netty5Server> config) throws Exception {
-        var authenticated = new ConcurrentHashMap<String, CompletableFuture<Netty5ClientChannel>>();
-        var server = new Netty5Server("127.0.0.1", 0);
-        server.serverIdentity(new Netty5ClientChannel.Identity("attack-server", UUID.randomUUID()));
+                               java.util.function.Consumer<NettyServer> config) throws Exception {
+        var authenticated = new ConcurrentHashMap<String, CompletableFuture<NettyClientChannel>>();
+        var server = new NettyServer("127.0.0.1", 0);
+        server.serverIdentity(new NettyClientChannel.Identity("attack-server", UUID.randomUUID()));
         // allowlist mode (the default), as in the demo
         server.packetRegistry(new PacketRegistry()
                 .register(TestPacket.class, TestRequestPacket.class, TestRespondPacket.class, ListBombPacket.class)
@@ -83,7 +83,7 @@ final class AttackHarness {
 
         server.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
+            public boolean evaluateFilter(NettyClientChannel.AuthType auth) {
                 return TOKEN.equals(auth.authProperty().get("token"));
             }
         });
@@ -102,7 +102,7 @@ final class AttackHarness {
         return new AttackHarness(server, address.getPort(), authenticated);
     }
 
-    Netty5Server server() {
+    NettyServer server() {
         return server;
     }
 
@@ -110,11 +110,11 @@ final class AttackHarness {
         return port;
     }
 
-    CompletableFuture<Netty5ClientChannel> onAuthenticated(String name) {
+    CompletableFuture<NettyClientChannel> onAuthenticated(String name) {
         return authenticated.computeIfAbsent(name, n -> new CompletableFuture<>());
     }
 
-    Netty5ClientChannel awaitAuthenticated(String name, long timeoutMillis) throws Exception {
+    NettyClientChannel awaitAuthenticated(String name, long timeoutMillis) throws Exception {
         return onAuthenticated(name).get(timeoutMillis, TimeUnit.MILLISECONDS);
     }
 
@@ -251,7 +251,7 @@ final class AttackHarness {
                 if (name.equals(className)) {
                     return true;
                 }
-                if (!name.equals(de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket.class.getName())) {
+                if (!name.equals(de.dataflair.netty.common.packet.auth.AuthAcceptedPacket.class.getName())) {
                     return false;
                 }
             }

@@ -1,15 +1,15 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
-import de.dataflair.netty5.actions.ConnectionAction;
-import de.dataflair.netty5.client.Netty5Client;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.common.packet.json.JsonPacket;
-import de.dataflair.netty5.filter.ConnectionFilter;
-import de.dataflair.netty5.common.codec.PacketRegistry;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.testpackets.TestPacket;
-import de.dataflair.netty5.testpackets.TestRequestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.actions.ConnectionAction;
+import de.dataflair.netty.client.NettyClient;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.common.packet.json.JsonPacket;
+import de.dataflair.netty.filter.ConnectionFilter;
+import de.dataflair.netty.common.codec.PacketRegistry;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestRequestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,13 +34,13 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ClientServerIntegrationTest {
-    private final List<Netty5Component> components = new ArrayList<>();
+    private final List<NettyComponent> components = new ArrayList<>();
 
     @AfterEach
     void tearDown() throws InterruptedException {
         for (var component : components) {
             component.shutdownGracefully(0, 2, TimeUnit.SECONDS).await(5, TimeUnit.SECONDS);
-            if (component instanceof Netty5Server server) {
+            if (component instanceof NettyServer server) {
                 server.workerGroup().terminationFuture().await(5, TimeUnit.SECONDS);
             }
         }
@@ -56,10 +56,10 @@ class ClientServerIntegrationTest {
         }
     }
 
-    Netty5Server startServer(int port, Consumer<Netty5Server> config) throws Exception {
+    NettyServer startServer(int port, Consumer<NettyServer> config) throws Exception {
         Exception last = null;
         for (int attempt = 0; attempt < 20; attempt++) {
-            var server = new Netty5Server("127.0.0.1", port);
+            var server = new NettyServer("127.0.0.1", port);
             // these tests are about transport and dispatch: no filter, open registry unless a test configures one
             server.allowAnonymous(true);
             server.packetRegistry(new PacketRegistry().allowAnyPacketClass());
@@ -81,8 +81,8 @@ class ClientServerIntegrationTest {
         throw last;
     }
 
-    Netty5Client client(int port, String name) {
-        var client = new Netty5Client("127.0.0.1", port, new Netty5ClientChannel.Identity(name, UUID.randomUUID()),
+    NettyClient client(int port, String name) {
+        var client = new NettyClient("127.0.0.1", port, new NettyClientChannel.Identity(name, UUID.randomUUID()),
                 Map.of("token", "t"));
         client.reconnectDelayMillis(100);
         client.packetRegistry(new PacketRegistry().allowAnyPacketClass());
@@ -90,7 +90,7 @@ class ClientServerIntegrationTest {
         return client;
     }
 
-    Netty5Client connectedClient(Netty5Server server, String name) throws Exception {
+    NettyClient connectedClient(NettyServer server, String name) throws Exception {
         var client = client(server.localAddress().getPort(), name);
         client.initialize();
         client.connectionFuture().get(5, TimeUnit.SECONDS);
@@ -130,7 +130,7 @@ class ClientServerIntegrationTest {
 
     @Test
     void authenticatesAndExchangesPackets() throws Exception {
-        var authenticated = new CompletableFuture<Netty5ClientChannel>();
+        var authenticated = new CompletableFuture<NettyClientChannel>();
         var server = startServer(0, s -> s.addAction(new ConnectionAction(authenticated::complete,
                 ConnectionAction.State.CLIENT_AUTHENTICATED)));
         server.packetTransmitter().listen(TestPacket.class, (sender, packet) ->
@@ -219,7 +219,7 @@ class ClientServerIntegrationTest {
     void rejectedConnectionIsClosed() throws Exception {
         var server = startServer(0, s -> s.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(Netty5ClientChannel.AuthType object) {
+            public boolean evaluateFilter(NettyClientChannel.AuthType object) {
                 return false;
             }
         }));
@@ -227,7 +227,7 @@ class ClientServerIntegrationTest {
         client.reconnectDelayMillis(60_000);
         client.initialize();
         client.connectionFuture().get(5, TimeUnit.SECONDS);
-        await(() -> client.connectionState() == Netty5Component.ConnectionState.DISCONNECTED, 5_000,
+        await(() -> client.connectionState() == NettyComponent.ConnectionState.DISCONNECTED, 5_000,
                 "client disconnected by server");
         assertTrue(server.connections().isEmpty());
     }
@@ -261,7 +261,7 @@ class ClientServerIntegrationTest {
         var server = startServer(0, s -> s.addAction(new ConnectionAction(c -> disconnects.incrementAndGet(),
                 ConnectionAction.State.CLIENT_DISCONNECTED)));
         int count = 12;
-        var clients = new ArrayList<Netty5Client>();
+        var clients = new ArrayList<NettyClient>();
         for (int i = 0; i < count; i++) {
             var client = client(server.localAddress().getPort(), "c" + i);
             client.initialize();
@@ -274,7 +274,7 @@ class ClientServerIntegrationTest {
         assertNotNull(server.firstChannel("c3"));
         // the server derives the UUID from the canonical name; the client learns it from AuthAcceptedPacket
         var effective = clients.get(5).authenticationFuture().get(5, TimeUnit.SECONDS);
-        assertEquals(Netty5Identities.derivedUuid("c5"), effective.uuid());
+        assertEquals(NettyIdentities.derivedUuid("c5"), effective.uuid());
         assertNotEquals(clients.get(5).identity().uuid(), effective.uuid());
         assertNotNull(server.clientChannel(effective.uuid()));
         assertNull(server.clientChannel(clients.get(5).identity().uuid()));
@@ -299,7 +299,7 @@ class ClientServerIntegrationTest {
         client.initialize();
         Thread.sleep(300);
         assertFalse(client.connectionFuture().isDone());
-        assertEquals(Netty5Component.ConnectionState.DISCONNECTED, client.connectionState());
+        assertEquals(NettyComponent.ConnectionState.DISCONNECTED, client.connectionState());
 
         var server = startServer(port, s -> {
         });
@@ -322,7 +322,7 @@ class ClientServerIntegrationTest {
 
         server.shutdownGracefully(0, 1, TimeUnit.SECONDS).await(5, TimeUnit.SECONDS);
         server.workerGroup().terminationFuture().await(5, TimeUnit.SECONDS);
-        await(() -> client.connectionState() == Netty5Component.ConnectionState.DISCONNECTED, 5_000,
+        await(() -> client.connectionState() == NettyComponent.ConnectionState.DISCONNECTED, 5_000,
                 "client noticed lost connection");
         assertFalse(client.connectionFuture().isDone());
 
@@ -347,9 +347,9 @@ class ClientServerIntegrationTest {
         var client = client(port, "daemon");
         client.initialize();
         await(() -> Thread.getAllStackTraces().keySet().stream()
-                .anyMatch(t -> t.getName().startsWith("netty5-client-reconnect-")), 5_000, "reconnect thread started");
+                .anyMatch(t -> t.getName().startsWith("netty-client-reconnect-")), 5_000, "reconnect thread started");
         Thread.getAllStackTraces().keySet().stream()
-                .filter(t -> t.getName().startsWith("netty5-client-reconnect-"))
+                .filter(t -> t.getName().startsWith("netty-client-reconnect-"))
                 .forEach(t -> assertTrue(t.isDaemon(), t.getName()));
 
         client.shutdownGracefully(0, 1, TimeUnit.SECONDS).await(5, TimeUnit.SECONDS);

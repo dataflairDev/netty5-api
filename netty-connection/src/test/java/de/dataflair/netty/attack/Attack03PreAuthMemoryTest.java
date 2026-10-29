@@ -1,6 +1,6 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestPacket;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufAllocatorMetricProvider;
 import org.junit.jupiter.api.Test;
@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Attack 3 - Pre-auth memory. 50 unauthenticated connections each announce a ~15 MiB frame (just under the
  * 16 MiB post-auth {@code maxFrameLength}) and dribble ~1 MiB, then stall.
  * <p>
- * Defence: {@code Netty5FrameDecoder} checks the announced length against the 64 KiB pre-auth limit as soon as
+ * Defence: {@code NettyFrameDecoder} checks the announced length against the 64 KiB pre-auth limit as soon as
  * the length field has arrived and closes the connection, so at most 50 x 64 KiB (plus overhead) is ever
  * buffered.
  */
@@ -40,7 +40,7 @@ class Attack03PreAuthMemoryTest {
                 sockets.add(socket);
                 try {
                     AttackHarness.send(socket,
-                            AttackHarness.frameHeaderOnly("de.dataflair.netty5.common.packet.auth.AuthPacket",
+                            AttackHarness.frameHeaderOnly("de.dataflair.netty.common.packet.auth.AuthPacket",
                                     ANNOUNCED_CONTENT));
                     socket.getOutputStream().write(new byte[DRIBBLE_BYTES]);
                     socket.getOutputStream().flush();

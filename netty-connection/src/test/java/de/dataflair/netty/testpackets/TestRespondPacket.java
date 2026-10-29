@@ -1,7 +1,7 @@
-package de.dataflair.netty5.testpackets;
+package de.dataflair.netty.testpackets;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.RespondPacket;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.RespondPacket;
 
 public class TestRespondPacket extends RespondPacket {
     private String value = "initializer";

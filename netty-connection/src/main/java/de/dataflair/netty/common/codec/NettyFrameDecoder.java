@@ -1,6 +1,6 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
-import de.dataflair.netty5.Netty5ChannelUtils;
+import de.dataflair.netty.NettyChannelUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -18,12 +18,12 @@ import java.nio.ByteOrder;
  * {@code maxFrameLength}. While an asynchronous connection filter is running no frame is cut;
  * {@link #resume(ChannelHandlerContext)} continues with the buffered bytes.
  */
-public final class Netty5FrameDecoder extends LengthFieldBasedFrameDecoder {
+public final class NettyFrameDecoder extends LengthFieldBasedFrameDecoder {
     private final boolean requireAuthentication;
     private final int preAuthMaxFrameLength;
     private ChannelHandlerContext context;
 
-    public Netty5FrameDecoder(int maxFrameLength, int preAuthMaxFrameLength, boolean requireAuthentication) {
+    public NettyFrameDecoder(int maxFrameLength, int preAuthMaxFrameLength, boolean requireAuthentication) {
         super(maxFrameLength, 0, Integer.BYTES, 0, Integer.BYTES);
         if (preAuthMaxFrameLength <= 0) {
             throw new IllegalArgumentException("preAuthMaxFrameLength must be positive: " + preAuthMaxFrameLength);
@@ -45,7 +45,7 @@ public final class Netty5FrameDecoder extends LengthFieldBasedFrameDecoder {
             in.skipBytes(in.readableBytes());
             return null;
         }
-        if (Netty5ChannelUtils.isAuthPending(channel)) {
+        if (NettyChannelUtils.isAuthPending(channel)) {
             // keep the bytes; reading is suspended until the filter has decided
             return null;
         }
@@ -56,7 +56,7 @@ public final class Netty5FrameDecoder extends LengthFieldBasedFrameDecoder {
     protected long getUnadjustedFrameLength(ByteBuf buf, int offset, int length, ByteOrder order) {
         var frameLength = super.getUnadjustedFrameLength(buf, offset, length, order);
         var context = this.context;
-        if (requireAuthentication && context != null && !Netty5ChannelUtils.isAuthenticated(context.channel())
+        if (requireAuthentication && context != null && !NettyChannelUtils.isAuthenticated(context.channel())
                 && frameLength + Integer.BYTES > preAuthMaxFrameLength) {
             context.close();
             throw new TooLongFrameException("Frame of " + (frameLength + Integer.BYTES)

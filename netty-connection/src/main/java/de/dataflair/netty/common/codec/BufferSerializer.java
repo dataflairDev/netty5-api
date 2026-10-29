@@ -1,4 +1,4 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
 import org.jetbrains.annotations.NotNull;
 

@@ -1,9 +1,9 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.UUID;
 
 @UtilityClass
-public class Netty5ChannelUtils {
+public class NettyChannelUtils {
     public final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
     public final UUID SYSTEM_UUID = UUID.fromString("0f0f0f0f-0f0f-0f0f-f0f0-0f0f0f0f0f0f");
 
@@ -58,15 +58,15 @@ public class Netty5ChannelUtils {
 
     /**
      * Set on a server side child channel once the peer has been authenticated.
-     * The {@link de.dataflair.netty5.common.codec.PacketDecoder} only accepts the auth packet until it is set.
+     * The {@link de.dataflair.netty.common.codec.PacketDecoder} only accepts the auth packet until it is set.
      */
-    public final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("netty5-api.authenticated");
+    public final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("netty-api.authenticated");
 
     /**
-     * Set on a server side child channel while an {@link de.dataflair.netty5.filter.AsyncConnectionFilter} is
+     * Set on a server side child channel while an {@link de.dataflair.netty.filter.AsyncConnectionFilter} is
      * evaluating its auth packet. No further frame is decoded until it is cleared.
      */
-    public final AttributeKey<Boolean> AUTH_PENDING = AttributeKey.valueOf("netty5-api.auth-pending");
+    public final AttributeKey<Boolean> AUTH_PENDING = AttributeKey.valueOf("netty-api.auth-pending");
 
     /**
      * Reason for {@link #suspendRead(Channel, int)}: the outbound buffer is above the high water mark.
@@ -77,7 +77,7 @@ public class Netty5ChannelUtils {
      */
     public final int READ_SUSPENDED_AUTHENTICATION = 2;
 
-    private final AttributeKey<Integer> READ_SUSPENSION = AttributeKey.valueOf("netty5-api.read-suspension");
+    private final AttributeKey<Integer> READ_SUSPENSION = AttributeKey.valueOf("netty-api.read-suspension");
 
     /**
      * Stops reading from the channel ({@code autoRead=false}) for the given reason. Reading resumes when every

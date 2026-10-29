@@ -1,4 +1,4 @@
-package de.dataflair.netty5.server;
+package de.dataflair.netty.server;
 
 import org.junit.jupiter.api.Test;
 

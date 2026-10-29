@@ -1,6 +1,6 @@
-package de.dataflair.netty5.filter;
+package de.dataflair.netty.filter;
 
-import de.dataflair.netty5.Netty5ClientChannel;
+import de.dataflair.netty.NettyClientChannel;
 
 /**
  * Decides whether an authenticating client is accepted. Runs on the event loop and must not block; use an
@@ -8,5 +8,5 @@ import de.dataflair.netty5.Netty5ClientChannel;
  * {@link ConnectionFilters#tokenEquals(String, String)} and bind the token to the identity the client claims
  * (for example a token per allowed name), otherwise every token holder can use any name.
  */
-public abstract class ConnectionFilter extends Filter<Netty5ClientChannel.AuthType> {
+public abstract class ConnectionFilter extends Filter<NettyClientChannel.AuthType> {
 }

@@ -1,4 +1,4 @@
-package de.dataflair.netty5.testpackets;
+package de.dataflair.netty.testpackets;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 

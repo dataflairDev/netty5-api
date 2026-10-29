@@ -1,7 +1,7 @@
-package de.dataflair.netty5.server;
+package de.dataflair.netty.server;
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,15 @@ package de.dataflair.netty5.server;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.Netty5ChannelInitializer;
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.Netty5Component;
-import de.dataflair.netty5.Netty5Identities;
-import de.dataflair.netty5.common.codec.PacketSizeEstimator;
-import de.dataflair.netty5.filter.AsyncConnectionFilter;
-import de.dataflair.netty5.filter.ConnectionFilter;
-import de.dataflair.netty5.filter.Filter;
+import de.dataflair.netty.NettyChannelInitializer;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.NettyComponent;
+import de.dataflair.netty.NettyIdentities;
+import de.dataflair.netty.common.codec.PacketSizeEstimator;
+import de.dataflair.netty.filter.AsyncConnectionFilter;
+import de.dataflair.netty.filter.ConnectionFilter;
+import de.dataflair.netty.filter.Filter;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
@@ -58,7 +58,7 @@ import java.util.concurrent.TimeUnit;
  *     ({@link #maxUnauthenticatedConnections}) and per prefix ({@link #maxConnectionsPerAddress}); new connections
  *     ({@link #maxNewConnectionsPerPrefix}) and authentication attempts ({@link #maxAuthFailuresPerMinute}) are
  *     rate limited per prefix (IPv4 /32, IPv6 {@link #ipv6PrefixLength}).</li>
- *     <li>The UUID of a client is derived from its canonical name ({@link Netty5Identities}) unless
+ *     <li>The UUID of a client is derived from its canonical name ({@link NettyIdentities}) unless
  *     {@link #trustClientUuid} is set. A second connection with the canonical name or UUID of an authenticated one
  *     is handled by the {@link #identityPolicy} (default {@link IdentityPolicy#REJECT}).</li>
  *     <li>Authenticated connections are closed after {@link #idleTimeoutMillis} without receiving anything (the
@@ -67,7 +67,7 @@ import java.util.concurrent.TimeUnit;
  * Filters, listeners, responders and actions run on the event loop of the connection and must not block.
  */
 @Getter
-public final class Netty5Server extends Netty5Component {
+public final class NettyServer extends NettyComponent {
     /**
      * Default time in milliseconds a connection may stay unauthenticated before it is closed.
      */
@@ -88,21 +88,21 @@ public final class Netty5Server extends Netty5Component {
     public static final long LIMITER_CLEANUP_INTERVAL_MILLIS = 10_000;
     public static final int DEFAULT_BACKLOG = 1024;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Server.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyServer.class);
 
-    private final EventLoopGroup workerGroup = Netty5ChannelUtils.createEventLoopGroup(0);
+    private final EventLoopGroup workerGroup = NettyChannelUtils.createEventLoopGroup(0);
     private final List<Filter<?>> filters = new CopyOnWriteArrayList<>();
     private final List<AsyncConnectionFilter> asyncConnectionFilters = new CopyOnWriteArrayList<>();
-    private final Netty5ServerPacketTransmitter packetTransmitter;
+    private final NettyServerPacketTransmitter packetTransmitter;
     /**
      * Authenticated connections. Thread-safe; entries are added after a successful authentication and removed
      * when the channel becomes inactive.
      */
-    private final List<Netty5ClientChannel> connections = new CopyOnWriteArrayList<>();
+    private final List<NettyClientChannel> connections = new CopyOnWriteArrayList<>();
     @Getter(AccessLevel.NONE)
     private final Object identityLock = new Object();
     @Setter
-    private volatile Netty5ClientChannel.Identity serverIdentity;
+    private volatile NettyClientChannel.Identity serverIdentity;
     /**
      * Time in milliseconds a connection may stay unauthenticated before it is closed; 0 or less disables the
      * timeout (logged as a warning). Must be set before {@link #initialize()}.
@@ -189,16 +189,16 @@ public final class Netty5Server extends Netty5Component {
     private volatile ScheduledFuture<?> limiterCleanup;
     private volatile Channel serverChannel;
 
-    public Netty5Server(@NotNull String hostname, int port) {
+    public NettyServer(@NotNull String hostname, int port) {
         super(1, hostname, port);
-        this.packetTransmitter = new Netty5ServerPacketTransmitter(bossGroup(), packet -> {
+        this.packetTransmitter = new NettyServerPacketTransmitter(bossGroup(), packet -> {
 
         }, (requestPacket, packetClass, consumer) -> {
 
         });
     }
 
-    public <T extends Filter<?>> Netty5Server addFilter(@NotNull T filter) {
+    public <T extends Filter<?>> NettyServer addFilter(@NotNull T filter) {
         this.filters.add(filter);
         return this;
     }
@@ -206,7 +206,7 @@ public final class Netty5Server extends Netty5Component {
     /**
      * Adds a filter that decides asynchronously. It runs after all synchronous {@link ConnectionFilter}s.
      */
-    public Netty5Server addFilter(@NotNull AsyncConnectionFilter filter) {
+    public NettyServer addFilter(@NotNull AsyncConnectionFilter filter) {
         this.asyncConnectionFilters.add(filter);
         return this;
     }
@@ -264,11 +264,11 @@ public final class Netty5Server extends Netty5Component {
         var handshakeTimeout = authTimeout > 0 ? Math.min(handshakeTimeoutMillis(), authTimeout)
                 : handshakeTimeoutMillis();
 
-        var initializer = new Netty5ChannelInitializer(this.serverIdentity, maxFrameLength(), preAuthMaxFrameLength(),
+        var initializer = new NettyChannelInitializer(this.serverIdentity, maxFrameLength(), preAuthMaxFrameLength(),
                 packetRegistry(), true) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
-                return new Netty5ServerHandler(Netty5Server.this);
+                return new NettyServerHandler(NettyServer.this);
             }
         };
         initializer.firstHandler(connectionLimiter).maxOutboundBufferBytes(maxOutboundBufferBytes());
@@ -288,7 +288,7 @@ public final class Netty5Server extends Netty5Component {
         }
         new ServerBootstrap()
                 .group(bossGroup(), workerGroup)
-                .channelFactory(Netty5ChannelUtils.buildChannelFactory())
+                .channelFactory(NettyChannelUtils.buildChannelFactory())
                 .option(ChannelOption.SO_BACKLOG, backlog)
                 .childHandler(initializer)
                 .childOption(ChannelOption.TCP_NODELAY, true)
@@ -311,11 +311,11 @@ public final class Netty5Server extends Netty5Component {
      * @return the identity the server uses for a client that sent {@code sent}: the name as sent and, unless
      * {@link #trustClientUuid} is set, the UUID derived from the canonical name
      */
-    public @NotNull Netty5ClientChannel.Identity effectiveIdentity(@NotNull Netty5ClientChannel.Identity sent) {
+    public @NotNull NettyClientChannel.Identity effectiveIdentity(@NotNull NettyClientChannel.Identity sent) {
         if (trustClientUuid && sent.uuid() != null) {
-            return new Netty5ClientChannel.Identity(sent.name(), sent.uuid());
+            return new NettyClientChannel.Identity(sent.name(), sent.uuid());
         }
-        return new Netty5ClientChannel.Identity(sent.name(), Netty5Identities.derivedUuid(sent.name()));
+        return new NettyClientChannel.Identity(sent.name(), NettyIdentities.derivedUuid(sent.name()));
     }
 
     /**
@@ -324,12 +324,12 @@ public final class Netty5Server extends Netty5Component {
      *
      * @return false if the connection was rejected because its identity is in use
      */
-    boolean register(@NotNull Netty5ClientChannel channel) {
+    boolean register(@NotNull NettyClientChannel channel) {
         var identity = channel.identity();
-        var canonical = Netty5Identities.canonicalName(identity.name());
+        var canonical = NettyIdentities.canonicalName(identity.name());
         synchronized (identityLock) {
             var conflicts = connections.stream()
-                    .filter(existing -> Netty5Identities.canonicalName(existing.identity().name()).equals(canonical)
+                    .filter(existing -> NettyIdentities.canonicalName(existing.identity().name()).equals(canonical)
                             || existing.identity().uuid().equals(identity.uuid()))
                     .toList();
             if (!conflicts.isEmpty()) {
@@ -384,22 +384,22 @@ public final class Netty5Server extends Netty5Component {
     /**
      * @return the authenticated channels whose name has the same canonical form as {@code name}
      */
-    public List<Netty5ClientChannel> clientChannel(@NotNull String name) {
-        var canonical = Netty5Identities.canonicalName(name);
+    public List<NettyClientChannel> clientChannel(@NotNull String name) {
+        var canonical = NettyIdentities.canonicalName(name);
         return this.connections.stream()
-                .filter(clientChannel -> Netty5Identities.canonicalName(clientChannel.identity().name())
+                .filter(clientChannel -> NettyIdentities.canonicalName(clientChannel.identity().name())
                         .equals(canonical))
                 .toList();
     }
 
-    public Netty5ClientChannel firstChannel(@NotNull String name) {
+    public NettyClientChannel firstChannel(@NotNull String name) {
         return this.clientChannel(name).stream().findFirst().orElse(null);
     }
 
     /**
-     * @param uuid the effective UUID, by default {@link Netty5Identities#derivedUuid(String)} of the client name
+     * @param uuid the effective UUID, by default {@link NettyIdentities#derivedUuid(String)} of the client name
      */
-    public Netty5ClientChannel clientChannel(@NotNull UUID uuid) {
+    public NettyClientChannel clientChannel(@NotNull UUID uuid) {
         return this.connections.stream()
                 .filter(clientChannel -> uuid.equals(clientChannel.identity().uuid()))
                 .findFirst()

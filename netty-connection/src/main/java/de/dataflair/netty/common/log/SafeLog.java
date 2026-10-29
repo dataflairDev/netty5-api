@@ -1,4 +1,4 @@
-package de.dataflair.netty5.common.log;
+package de.dataflair.netty.common.log;
 
 import io.netty.channel.Channel;
 import io.netty.util.AttributeKey;
@@ -30,7 +30,7 @@ public final class SafeLog {
      */
     public static final long WINDOW_MILLIS = 10_000;
 
-    private static final AttributeKey<Window> WINDOW = AttributeKey.valueOf("netty5-api.log-window");
+    private static final AttributeKey<Window> WINDOW = AttributeKey.valueOf("netty-api.log-window");
 
     private SafeLog() {
     }

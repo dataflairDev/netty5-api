@@ -1,7 +1,7 @@
-package de.dataflair.netty5.server;
+package de.dataflair.netty.server;
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,20 @@ package de.dataflair.netty5.server;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.actions.ConnectionAction;
-import de.dataflair.netty5.client.Netty5ClientPacketTransmitter;
-import de.dataflair.netty5.common.codec.Netty5FrameDecoder;
-import de.dataflair.netty5.common.codec.PacketRejectedException;
-import de.dataflair.netty5.common.log.SafeLog;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.common.packet.auth.KeepAlivePacket;
-import de.dataflair.netty5.filter.AsyncConnectionFilter;
-import de.dataflair.netty5.filter.ConnectionFilter;
-import de.dataflair.netty5.filter.PacketReceiveFilter;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.actions.ConnectionAction;
+import de.dataflair.netty.client.NettyClientPacketTransmitter;
+import de.dataflair.netty.common.codec.NettyFrameDecoder;
+import de.dataflair.netty.common.codec.PacketRejectedException;
+import de.dataflair.netty.common.log.SafeLog;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.common.packet.auth.AuthAcceptedPacket;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.common.packet.auth.KeepAlivePacket;
+import de.dataflair.netty.filter.AsyncConnectionFilter;
+import de.dataflair.netty.filter.ConnectionFilter;
+import de.dataflair.netty.filter.PacketReceiveFilter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.DecoderException;
@@ -58,18 +58,18 @@ import java.util.concurrent.TimeUnit;
  * the server answers with an {@link AuthAcceptedPacket} carrying the effective identity, and drops
  * {@link KeepAlivePacket}s before any filter or listener.
  */
-public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packet> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5ServerHandler.class);
+public final class NettyServerHandler extends SimpleChannelInboundHandler<Packet> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyServerHandler.class);
 
     private enum State {NEW, PENDING, AUTHENTICATED, REJECTED}
 
-    private final Netty5Server server;
+    private final NettyServer server;
     private State state = State.NEW;
-    private Netty5ClientChannel clientChannel;
+    private NettyClientChannel clientChannel;
     private ScheduledFuture<?> authTimeout;
     private int rejectedPackets;
 
-    public Netty5ServerHandler(@NotNull Netty5Server server) {
+    public NettyServerHandler(@NotNull NettyServer server) {
         this.server = server;
     }
 
@@ -128,8 +128,8 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
         }
 
         var identity = server.effectiveIdentity(authPacket.identity());
-        var netty5Channel = new Netty5ClientChannel(identity, ctx.channel(), null);
-        var auth = new Netty5ClientChannel.AuthType(netty5Channel, authPacket.properties());
+        var nettyChannel = new NettyClientChannel(identity, ctx.channel(), null);
+        var auth = new NettyClientChannel.AuthType(nettyChannel, authPacket.properties());
         for (var filter : server.filters()) {
             if (filter instanceof ConnectionFilter connectionFilter) {
                 final boolean accepted;
@@ -149,14 +149,14 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
 
         var asyncFilters = server.asyncConnectionFilters();
         if (asyncFilters.isEmpty()) {
-            completeAuthentication(ctx, netty5Channel, name, address);
+            completeAuthentication(ctx, nettyChannel, name, address);
             return;
         }
 
         state = State.PENDING;
         var channel = ctx.channel();
-        channel.attr(Netty5ChannelUtils.AUTH_PENDING).set(Boolean.TRUE);
-        Netty5ChannelUtils.suspendRead(channel, Netty5ChannelUtils.READ_SUSPENDED_AUTHENTICATION);
+        channel.attr(NettyChannelUtils.AUTH_PENDING).set(Boolean.TRUE);
+        NettyChannelUtils.suspendRead(channel, NettyChannelUtils.READ_SUSPENDED_AUTHENTICATION);
 
         CompletionStage<Boolean> result = CompletableFuture.completedFuture(Boolean.TRUE);
         for (var filter : asyncFilters) {
@@ -169,14 +169,14 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
                 LOGGER.warn("{}Async connection filter failed for {}: {}", server.prefix(), name,
                         SafeLog.clean(throwable));
             }
-            finishAsyncAuthentication(ctx, netty5Channel, name, address, throwable == null && Boolean.TRUE.equals(accepted));
+            finishAsyncAuthentication(ctx, nettyChannel, name, address, throwable == null && Boolean.TRUE.equals(accepted));
         }));
     }
 
-    private void finishAsyncAuthentication(ChannelHandlerContext ctx, Netty5ClientChannel netty5Channel, String name,
+    private void finishAsyncAuthentication(ChannelHandlerContext ctx, NettyClientChannel nettyChannel, String name,
                                            @Nullable InetAddress address, boolean accepted) {
         var channel = ctx.channel();
-        channel.attr(Netty5ChannelUtils.AUTH_PENDING).set(null);
+        channel.attr(NettyChannelUtils.AUTH_PENDING).set(null);
         if (state != State.PENDING || !channel.isActive()) {
             return;
         }
@@ -184,13 +184,13 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
             failAuthentication(ctx, name, address);
             return;
         }
-        completeAuthentication(ctx, netty5Channel, name, address);
+        completeAuthentication(ctx, nettyChannel, name, address);
         if (state != State.AUTHENTICATED) {
             return;
         }
-        Netty5ChannelUtils.resumeRead(channel, Netty5ChannelUtils.READ_SUSPENDED_AUTHENTICATION);
-        var frameDecoder = channel.pipeline().get(Netty5FrameDecoder.class);
-        var frameContext = channel.pipeline().context(Netty5FrameDecoder.class);
+        NettyChannelUtils.resumeRead(channel, NettyChannelUtils.READ_SUSPENDED_AUTHENTICATION);
+        var frameDecoder = channel.pipeline().get(NettyFrameDecoder.class);
+        var frameContext = channel.pipeline().context(NettyFrameDecoder.class);
         if (frameDecoder != null && frameContext != null) {
             try {
                 frameDecoder.resume(frameContext);
@@ -206,22 +206,22 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
         reject(ctx);
     }
 
-    private void completeAuthentication(ChannelHandlerContext ctx, Netty5ClientChannel netty5Channel, String name,
+    private void completeAuthentication(ChannelHandlerContext ctx, NettyClientChannel nettyChannel, String name,
                                         @Nullable InetAddress address) {
         if (address != null) {
             // the filters accepted: this attempt is no failure
             server.authFailureLimiter().release(address);
         }
-        netty5Channel.transmitter(new Netty5ClientPacketTransmitter(server.workerGroup(), netty5Channel::sendPacket));
-        if (!server.register(netty5Channel)) {
+        nettyChannel.transmitter(new NettyClientPacketTransmitter(server.workerGroup(), nettyChannel::sendPacket));
+        if (!server.register(nettyChannel)) {
             log(ctx, "Identity {} ({}) is already connected, closing the new connection", name,
-                    netty5Channel.identity().uuid());
+                    nettyChannel.identity().uuid());
             reject(ctx);
             return;
         }
-        this.clientChannel = netty5Channel;
+        this.clientChannel = nettyChannel;
         this.state = State.AUTHENTICATED;
-        ctx.channel().attr(Netty5ChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
+        ctx.channel().attr(NettyChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
         cancelAuthTimeout();
         var limiter = server.connectionLimiter();
         if (limiter != null) {
@@ -233,9 +233,9 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
             ctx.pipeline().addBefore(ctx.name(), "idle", new IdleStateHandler(idle, 0, 0, TimeUnit.MILLISECONDS));
         }
         // the first packet the client receives tells it the identity the server uses
-        ctx.channel().writeAndFlush(new AuthAcceptedPacket(netty5Channel.identity()));
+        ctx.channel().writeAndFlush(new AuthAcceptedPacket(nettyChannel.identity()));
 
-        runActions(ConnectionAction.State.CLIENT_AUTHENTICATED, netty5Channel);
+        runActions(ConnectionAction.State.CLIENT_AUTHENTICATED, nettyChannel);
     }
 
     private void reject(ChannelHandlerContext ctx) {
@@ -271,7 +271,7 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         cancelAuthTimeout();
-        ctx.channel().attr(Netty5ChannelUtils.AUTH_PENDING).set(null);
+        ctx.channel().attr(NettyChannelUtils.AUTH_PENDING).set(null);
         var channel = this.clientChannel;
         if (channel != null) {
             this.clientChannel = null;
@@ -305,7 +305,7 @@ public final class Netty5ServerHandler extends SimpleChannelInboundHandler<Packe
         }
     }
 
-    private void runActions(ConnectionAction.State state, Netty5ClientChannel channel) {
+    private void runActions(ConnectionAction.State state, NettyClientChannel channel) {
         for (var action : server.actions()) {
             if (action instanceof ConnectionAction connectionAction && connectionAction.state() == state) {
                 try {

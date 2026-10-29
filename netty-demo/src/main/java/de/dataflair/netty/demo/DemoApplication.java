@@ -1,7 +1,7 @@
-package de.dataflair.netty5.demo;
+package de.dataflair.netty.demo;
 
-import de.dataflair.netty5.demo.packets.UserLookupRequest;
-import de.dataflair.netty5.demo.packets.UserLookupResponse;
+import de.dataflair.netty.demo.packets.UserLookupRequest;
+import de.dataflair.netty.demo.packets.UserLookupResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +24,7 @@ public final class DemoApplication {
     /**
      * Environment variable with the token of the demo client.
      */
-    public static final String TOKEN_VARIABLE = "NETTY5_DEMO_TOKEN";
+    public static final String TOKEN_VARIABLE = "NETTY_DEMO_TOKEN";
     private static final String FALLBACK_TOKEN = "demo-secret";
     private static final Logger LOGGER = LoggerFactory.getLogger(DemoApplication.class);
 

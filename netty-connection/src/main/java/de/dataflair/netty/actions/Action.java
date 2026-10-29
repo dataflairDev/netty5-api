@@ -1,4 +1,4 @@
-package de.dataflair.netty5.actions;
+package de.dataflair.netty.actions;
 
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;

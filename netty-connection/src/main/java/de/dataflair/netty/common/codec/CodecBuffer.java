@@ -1,9 +1,9 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.common.log.SafeLog;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.common.log.SafeLog;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.NotNull;
@@ -733,7 +733,7 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      * @throws IllegalArgumentException if the document is longer than {@code maxLength}
      */
     public JsonObject readJsonObject(int maxLength) {
-        return Netty5ChannelUtils.JSON.fromJson(this.readString(maxLength), JsonObject.class);
+        return NettyChannelUtils.JSON.fromJson(this.readString(maxLength), JsonObject.class);
     }
 
     /**

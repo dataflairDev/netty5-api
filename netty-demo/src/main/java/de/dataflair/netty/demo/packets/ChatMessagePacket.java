@@ -1,14 +1,14 @@
-package de.dataflair.netty5.demo.packets;
+package de.dataflair.netty.demo.packets;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.Packet;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * Plain packet without a response, sent with {@code publishPacket} or {@code sendPacket}.
  * <p>
  * Every packet class needs to be public, concrete and have a public {@code (CodecBuffer)} constructor, otherwise
- * the {@link de.dataflair.netty5.common.codec.PacketRegistry} rejects it.
+ * the {@link de.dataflair.netty.common.codec.PacketRegistry} rejects it.
  */
 public class ChatMessagePacket extends Packet {
     private final String sender;
@@ -24,7 +24,7 @@ public class ChatMessagePacket extends Packet {
     }
 
     /**
-     * Receiving side, called by {@link de.dataflair.netty5.common.packet.PacketFactory}. Read in the same order
+     * Receiving side, called by {@link de.dataflair.netty.common.packet.PacketFactory}. Read in the same order
      * as written. Reading in the constructor is fine here because the fields are final and have no initialiser;
      * for non-final fields with an initialiser override {@code readContent(CodecBuffer)} instead
      * (see {@link UserLookupResponse}).

@@ -1,7 +1,7 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.Packet;
 
 import java.util.ArrayList;
 import java.util.List;

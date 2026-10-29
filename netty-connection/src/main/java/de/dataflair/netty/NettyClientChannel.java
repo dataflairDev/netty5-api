@@ -1,7 +1,7 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@ package de.dataflair.netty5;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.client.Netty5ClientPacketTransmitter;
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.client.NettyClientPacketTransmitter;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.Packet;
 import io.netty.channel.Channel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -31,12 +31,12 @@ import java.util.UUID;
 
 @Getter
 @AllArgsConstructor
-public final class Netty5ClientChannel {
+public final class NettyClientChannel {
     @Setter
     private Identity identity;
     private final Channel channel;
     @Setter
-    private Netty5ClientPacketTransmitter transmitter;
+    private NettyClientPacketTransmitter transmitter;
 
     public void sendPacket(@NotNull Packet packet) {
         channel.writeAndFlush(packet);
@@ -71,16 +71,16 @@ public final class Netty5ClientChannel {
     }
 
     /**
-     * What a {@link de.dataflair.netty5.filter.ConnectionFilter} sees. {@code clientChannel().identity()} holds the
+     * What a {@link de.dataflair.netty.filter.ConnectionFilter} sees. {@code clientChannel().identity()} holds the
      * name as sent and the UUID the server will use (derived from the canonical name unless the server trusts
      * client UUIDs).
      */
-    public record AuthType(Netty5ClientChannel clientChannel, Map<String, String> authProperty) {
+    public record AuthType(NettyClientChannel clientChannel, Map<String, String> authProperty) {
         /**
-         * @return the canonical name ({@link Netty5Identities#canonicalName(String)}); bind tokens to this
+         * @return the canonical name ({@link NettyIdentities#canonicalName(String)}); bind tokens to this
          */
         public String canonicalName() {
-            return Netty5Identities.canonicalName(clientChannel.identity().name());
+            return NettyIdentities.canonicalName(clientChannel.identity().name());
         }
     }
 

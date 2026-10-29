@@ -1,15 +1,15 @@
-package de.dataflair.netty5.demo;
+package de.dataflair.netty.demo;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.Netty5Identities;
-import de.dataflair.netty5.actions.ConnectionAction;
-import de.dataflair.netty5.common.codec.PacketRegistry;
-import de.dataflair.netty5.demo.packets.ChatMessagePacket;
-import de.dataflair.netty5.demo.packets.UserLookupRequest;
-import de.dataflair.netty5.demo.packets.UserLookupResponse;
-import de.dataflair.netty5.filter.ConnectionFilter;
-import de.dataflair.netty5.filter.ConnectionFilters;
-import de.dataflair.netty5.server.Netty5Server;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.NettyIdentities;
+import de.dataflair.netty.actions.ConnectionAction;
+import de.dataflair.netty.common.codec.PacketRegistry;
+import de.dataflair.netty.demo.packets.ChatMessagePacket;
+import de.dataflair.netty.demo.packets.UserLookupRequest;
+import de.dataflair.netty.demo.packets.UserLookupResponse;
+import de.dataflair.netty.filter.ConnectionFilter;
+import de.dataflair.netty.filter.ConnectionFilters;
+import de.dataflair.netty.server.NettyServer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -30,11 +30,11 @@ public final class DemoServer {
      */
     public static final int MAX_REJECTED_CLIENTS = 100;
 
-    private final Netty5Server server;
+    private final NettyServer server;
     private final List<String> receivedChat = new CopyOnWriteArrayList<>();
     private final List<String> rejectedClients = new CopyOnWriteArrayList<>();
-    private final CompletableFuture<Netty5ClientChannel> firstAuthenticated = new CompletableFuture<>();
-    private final CompletableFuture<Netty5ClientChannel> firstDisconnected = new CompletableFuture<>();
+    private final CompletableFuture<NettyClientChannel> firstAuthenticated = new CompletableFuture<>();
+    private final CompletableFuture<NettyClientChannel> firstDisconnected = new CompletableFuture<>();
 
     /**
      * @param tokensByName the clients allowed to connect: name and its token. The token is bound to the name, so
@@ -42,8 +42,8 @@ public final class DemoServer {
      */
     public DemoServer(@NotNull String host, int port, @NotNull Map<String, String> tokensByName) {
         // port 0 binds a free port, see port()
-        this.server = new Netty5Server(host, port);
-        server.serverIdentity(new Netty5ClientChannel.Identity("demo-server", UUID.randomUUID()));
+        this.server = new NettyServer(host, port);
+        server.serverIdentity(new NettyClientChannel.Identity("demo-server", UUID.randomUUID()));
 
         // Everything below must be configured before initialize().
         // Allowlist mode (the default): only registered classes can be instantiated by a peer. Only AuthPacket
@@ -65,10 +65,10 @@ public final class DemoServer {
         // derives the UUID of a client from that canonical name; a second connection with the same canonical
         // name is rejected by default (IdentityPolicy.REJECT).
         var allowed = new java.util.HashMap<String, String>();
-        tokensByName.forEach((name, token) -> allowed.put(Netty5Identities.canonicalName(name), token));
+        tokensByName.forEach((name, token) -> allowed.put(NettyIdentities.canonicalName(name), token));
         server.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
+            public boolean evaluateFilter(NettyClientChannel.AuthType auth) {
                 var name = auth.clientChannel().identity().name();
                 var expected = allowed.get(auth.canonicalName());
                 var accepted = expected != null
@@ -141,7 +141,7 @@ public final class DemoServer {
         server.workerGroup().terminationFuture().await(10, TimeUnit.SECONDS);
     }
 
-    public Netty5Server server() {
+    public NettyServer server() {
         return server;
     }
 
@@ -153,11 +153,11 @@ public final class DemoServer {
         return rejectedClients;
     }
 
-    public CompletableFuture<Netty5ClientChannel> firstAuthenticated() {
+    public CompletableFuture<NettyClientChannel> firstAuthenticated() {
         return firstAuthenticated;
     }
 
-    public CompletableFuture<Netty5ClientChannel> firstDisconnected() {
+    public CompletableFuture<NettyClientChannel> firstDisconnected() {
         return firstDisconnected;
     }
 

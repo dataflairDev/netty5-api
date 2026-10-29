@@ -1,11 +1,11 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
-import de.dataflair.netty5.Netty5ChannelInitializer;
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.common.log.SafeLog;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.testpackets.DeepRecursionPacket;
-import de.dataflair.netty5.testpackets.ExplodingInitPacket;
+import de.dataflair.netty.NettyChannelInitializer;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.common.log.SafeLog;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.testpackets.DeepRecursionPacket;
+import de.dataflair.netty.testpackets.ExplodingInitPacket;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -87,7 +87,7 @@ class HardeningCodecTest {
         for (var packetClass : java.util.List.<Class<? extends Packet>>of(ExplodingInitPacket.class,
                 DeepRecursionPacket.class)) {
             var channel = channel(new PacketRegistry().register(packetClass));
-            channel.attr(Netty5ChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
+            channel.attr(NettyChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
             var error = assertThrows(DecoderException.class,
                     () -> channel.writeInbound(frame(packetClass.getName())), packetClass.getName());
             assertFalse(error instanceof PacketRejectedException, "a fatal error is not a mere rejection");
@@ -115,7 +115,7 @@ class HardeningCodecTest {
     }
 
     private static EmbeddedChannel channel(PacketRegistry registry) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
+        return new EmbeddedChannel(new NettyChannelInitializer(null, NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
                 registry, false) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {

@@ -1,9 +1,9 @@
-package de.dataflair.netty5.client;
+package de.dataflair.netty.client;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,14 @@ package de.dataflair.netty5.client;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.Netty5Component;
-import de.dataflair.netty5.common.codec.PacketRejectedException;
-import de.dataflair.netty5.common.log.SafeLog;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.common.packet.auth.KeepAlivePacket;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.NettyComponent;
+import de.dataflair.netty.common.codec.PacketRejectedException;
+import de.dataflair.netty.common.log.SafeLog;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.common.packet.auth.AuthAcceptedPacket;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.common.packet.auth.KeepAlivePacket;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.DecoderException;
@@ -46,14 +46,14 @@ import java.util.concurrent.TimeUnit;
  * and drops {@link KeepAlivePacket}s. After {@code maxRejectedPackets} (default 16) rejected packets the
  * connection is closed (and re-established by the client).
  */
-public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packet> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5ClientHandler.class);
+public final class NettyClientHandler extends SimpleChannelInboundHandler<Packet> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyClientHandler.class);
 
-    private final Netty5Client client;
+    private final NettyClient client;
     private int rejectedPackets;
     private boolean accepted;
 
-    public Netty5ClientHandler(@NotNull Netty5Client client) {
+    public NettyClientHandler(@NotNull NettyClient client) {
         this.client = client;
     }
 
@@ -125,8 +125,8 @@ public final class Netty5ClientHandler extends SimpleChannelInboundHandler<Packe
             return;
         }
         ctx.channel().writeAndFlush(new AuthPacket(client.identity(), client.authProperty()));
-        client.thisChannel(new Netty5ClientChannel(client.identity(), ctx.channel(), client.packetTransmitter()));
-        client.connectionState(Netty5Component.ConnectionState.CONNECTED);
+        client.thisChannel(new NettyClientChannel(client.identity(), ctx.channel(), client.packetTransmitter()));
+        client.connectionState(NettyComponent.ConnectionState.CONNECTED);
         client.connectionFuture().complete(null);
     }
 

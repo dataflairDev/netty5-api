@@ -1,9 +1,9 @@
-package de.dataflair.netty5.common.packet;
+package de.dataflair.netty.common.packet;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@ package de.dataflair.netty5.common.packet;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.Netty5ClientChannel;
+import de.dataflair.netty.NettyClientChannel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.util.concurrent.EventExecutor;
 import lombok.Getter;
 import lombok.Setter;
-import de.dataflair.netty5.common.log.SafeLog;
+import de.dataflair.netty.common.log.SafeLog;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,8 +48,8 @@ import java.util.function.Function;
  * they time out after {@link #requestTimeoutMillis()} milliseconds.
  */
 @Getter
-public abstract class Netty5PacketTransmitter {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5PacketTransmitter.class);
+public abstract class NettyPacketTransmitter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyPacketTransmitter.class);
     /**
      * Default timeout for requests in milliseconds.
      */
@@ -59,13 +59,13 @@ public abstract class Netty5PacketTransmitter {
     private final SecureRandom keyRandom = new SecureRandom();
     private final EventLoopGroup eventExecutors;
     private final Consumer<Packet> packetConsumer;
-    private final Map<Class<? extends Packet>, Map<String, BiConsumer<Netty5ClientChannel, Packet>>> listener = new ConcurrentHashMap<>();
+    private final Map<Class<? extends Packet>, Map<String, BiConsumer<NettyClientChannel, Packet>>> listener = new ConcurrentHashMap<>();
     private final Map<UUID, CompletableFuture<Packet>> pendingRequests = new ConcurrentHashMap<>();
     private final Map<Class<? extends RequestPacket>, Map<String, Function<RequestPacket, RespondPacket>>> responders = new ConcurrentHashMap<>();
     @Setter
     private volatile long requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS;
 
-    protected Netty5PacketTransmitter(@NotNull EventLoopGroup eventExecutors,
+    protected NettyPacketTransmitter(@NotNull EventLoopGroup eventExecutors,
                                       @NotNull Consumer<Packet> packetConsumer) {
         this.eventExecutors = eventExecutors;
         this.packetConsumer = packetConsumer;
@@ -74,13 +74,13 @@ public abstract class Netty5PacketTransmitter {
     @SuppressWarnings("unchecked")
     public <P extends Packet> void listen(@NotNull Class<P> packetClass,
                                           @NotNull String key,
-                                          @NotNull BiConsumer<Netty5ClientChannel, P> callback) {
+                                          @NotNull BiConsumer<NettyClientChannel, P> callback) {
         this.listener.computeIfAbsent(packetClass, _ -> new ConcurrentHashMap<>())
-                .put(key, (BiConsumer<Netty5ClientChannel, Packet>) callback);
+                .put(key, (BiConsumer<NettyClientChannel, Packet>) callback);
     }
 
     public <P extends Packet> void listen(@NotNull Class<P> packetClass,
-                                          @NotNull BiConsumer<Netty5ClientChannel, P> callback) {
+                                          @NotNull BiConsumer<NettyClientChannel, P> callback) {
         this.listen(packetClass, generateRandomKey(), callback);
     }
 
@@ -234,13 +234,13 @@ public abstract class Netty5PacketTransmitter {
         return false;
     }
 
-    public abstract void callActions(@NotNull Packet packet, Netty5ClientChannel sender);
+    public abstract void callActions(@NotNull Packet packet, NettyClientChannel sender);
 
     /**
      * Dispatches a received packet. A {@link RespondPacket} that does not answer a pending request of this
      * transmitter is dropped; it never reaches the listeners.
      */
-    public void call(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
+    public void call(@NotNull Packet packet, @Nullable NettyClientChannel sender) {
         if (packet instanceof RespondPacket respondPacket && !this.completeRequest(respondPacket)) {
             LOGGER.debug("Unsolicited response {} dropped", packet.getClass().getName());
             return;
@@ -254,7 +254,7 @@ public abstract class Netty5PacketTransmitter {
         this.callListeners(packet, sender);
     }
 
-    protected void callListeners(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
+    protected void callListeners(@NotNull Packet packet, @Nullable NettyClientChannel sender) {
         var listeners = listener.get(packet.getClass());
         if (listeners != null) {
             listeners.forEach((_, packetConsumer) -> packetConsumer.accept(sender, packet));

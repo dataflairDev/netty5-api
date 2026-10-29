@@ -7,6 +7,40 @@
 - Migrated from Netty 5 Alpha5 to Netty 4.2.19. All imports change from `io.netty5.*` to `io.netty.*`.
 - Requires Java 27.
 
+### Renaming
+
+- Renamed all `Netty5*` classes to `Netty*`, package `de.dataflair.netty5` to `de.dataflair.netty`, modules to
+  `netty-connection`/`netty-demo`. The project no longer runs on Netty 5, so the name was dropped everywhere.
+- The prefix of derived identity UUIDs changed from `"netty5-api:identity:"` to `"netty-api:identity:"`, so
+  `NettyIdentities.derivedUuid(name)` returns a different UUID for the same name than earlier 2.0.0 builds. Stored
+  derived UUIDs must be recomputed.
+- The Gradle root project is `netty-api`, the Maven group `de.dataflair.netty-api`; the artifactId follows the
+  module name (`netty-connection`). Channel attribute keys (`netty-api.*`) and the reconnect thread name
+  (`netty-client-reconnect-*`) follow the new name.
+
+| Old | New |
+|---|---|
+| `de.dataflair.netty5` (and all subpackages) | `de.dataflair.netty` |
+| module `netty5-connection` | module `netty-connection` |
+| module `netty5-demo` | module `netty-demo` |
+| root project `netty5-api` | root project `netty-api` |
+| group `de.dataflair.netty5-api` | group `de.dataflair.netty-api` |
+| `Netty5ChannelInitializer` | `NettyChannelInitializer` |
+| `Netty5ChannelUtils` | `NettyChannelUtils` |
+| `Netty5ClientChannel` | `NettyClientChannel` |
+| `Netty5Component` | `NettyComponent` |
+| `Netty5Identities` | `NettyIdentities` |
+| `client.Netty5Client` | `client.NettyClient` |
+| `client.Netty5ClientHandler` | `client.NettyClientHandler` |
+| `client.Netty5ClientPacketTransmitter` | `client.NettyClientPacketTransmitter` |
+| `common.codec.Netty5FrameDecoder` | `common.codec.NettyFrameDecoder` |
+| `common.packet.Netty5PacketTransmitter` | `common.packet.NettyPacketTransmitter` |
+| `server.Netty5Server` | `server.NettyServer` |
+| `server.Netty5ServerHandler` | `server.NettyServerHandler` |
+| `server.Netty5ServerPacketTransmitter` | `server.NettyServerPacketTransmitter` |
+| identity UUID prefix `"netty5-api:identity:"` | `"netty-api:identity:"` |
+| environment variable `NETTY5_DEMO_TOKEN` | `NETTY_DEMO_TOKEN` |
+
 ### Packet construction
 
 - Received packets are built by `PacketFactory`: first the public `(CodecBuffer)` constructor, then
@@ -19,27 +53,27 @@
 
 ### Removed and changed API
 
-- `Netty5PacketTransmitter.NullSimulationPacket` was removed.
+- `NettyPacketTransmitter.NullSimulationPacket` was removed.
 - `futureRequests` and `directRequests` were replaced by `pendingRequests`
   (`Map<UUID, CompletableFuture<Packet>>`); requests time out after `requestTimeoutMillis` (default 5 s).
-- `Netty5Server.connections(List)` was removed. `connections()` is a thread-safe list that only contains
+- `NettyServer.connections(List)` was removed. `connections()` is a thread-safe list that only contains
   authenticated channels.
 - `PacketDecoder` now extends `MessageToMessageDecoder<ByteBuf>` instead of `ByteToMessageDecoder`.
-- `Netty5Component.deployFuture()` returns a `ChannelFutureListener` instead of `FutureListener<? super Channel>`.
-- `maxRejectedPackets` and `DEFAULT_MAX_REJECTED_PACKETS` moved from `Netty5Server` to `Netty5Component`, so the
+- `NettyComponent.deployFuture()` returns a `ChannelFutureListener` instead of `FutureListener<? super Channel>`.
+- `maxRejectedPackets` and `DEFAULT_MAX_REJECTED_PACKETS` moved from `NettyServer` to `NettyComponent`, so the
   client has the setting as well.
 - `AuthFailureLimiter` counts attempts (`tryAcquire`/`release`) instead of only failures; `ConnectionLimiter` has a
   new constructor with the pre-auth slot limit, the connection rate limiter and the IPv6 prefix length.
 
 ### Limits and authentication
 
-- Frames are limited to 16 MiB (`Netty5Component#maxFrameLength`). Larger incoming frames close the channel;
+- Frames are limited to 16 MiB (`NettyComponent#maxFrameLength`). Larger incoming frames close the channel;
   larger outgoing packets fail the write promise with a `TooLongFrameException`.
-- Before authentication frames are limited to 64 KiB (`Netty5Component#preAuthMaxFrameLength`) and an
+- Before authentication frames are limited to 64 KiB (`NettyComponent#preAuthMaxFrameLength`) and an
   `AuthPacket` may carry at most 256 properties.
 - The server requires authentication: until an `AuthPacket` has been accepted, every other packet is rejected
   and closes the connection. Connections that do not authenticate within 10 s are closed
-  (`Netty5Server#authTimeoutMillis`).
+  (`NettyServer#authTimeoutMillis`).
 - Framing errors (for example a negative length field) close the connection. A packet rejected after
   authentication is dropped and the connection stays open.
 
@@ -65,9 +99,9 @@
 
 ### Security
 
-- **Fail-closed server.** `Netty5Server.initialize()` throws an `IllegalStateException` if no `ConnectionFilter`
+- **Fail-closed server.** `NettyServer.initialize()` throws an `IllegalStateException` if no `ConnectionFilter`
   or `AsyncConnectionFilter` is registered, unless `allowAnonymous(true)` is set.
-- **Pre-auth buffering.** The new `Netty5FrameDecoder` (a `LengthFieldBasedFrameDecoder`) checks the announced
+- **Pre-auth buffering.** The new `NettyFrameDecoder` (a `LengthFieldBasedFrameDecoder`) checks the announced
   frame length against `preAuthMaxFrameLength` as soon as the length field has arrived and closes the connection
   with a `TooLongFrameException`; before, up to `maxFrameLength` was buffered per unauthenticated connection.
 - **Connection limits.** `ConnectionLimiter`, the first handler of every server connection, limits open
@@ -88,15 +122,15 @@
   that both send a lot could wait for each other forever. Both close a channel whose outbound buffer exceeds
   `maxOutboundBufferBytes` (default 8 MiB). `PacketSizeEstimator` (content bytes plus overhead) is installed as
   `MESSAGE_SIZE_ESTIMATOR`, so packets queued from other threads count towards the water marks before they are
-  encoded. `Netty5ClientChannel.isWritable()` and `Netty5Client.isWritable()` were added.
+  encoded. `NettyClientChannel.isWritable()` and `NettyClient.isWritable()` were added.
 - **Identity.** The server derives the UUID of a client from its canonical name
-  (`Netty5Identities.derivedUuid`: `UUID.nameUUIDFromBytes` of a fixed prefix plus the canonical name); the UUID
+  (`NettyIdentities.derivedUuid`: `UUID.nameUUIDFromBytes` of a fixed prefix plus the canonical name); the UUID
   in the `AuthPacket` is ignored unless `trustClientUuid(true)` is set. The canonical name
-  (`Netty5Identities.canonicalName`: NFKC, then `toLowerCase(Locale.ROOT)`) is used for the conflict check and for
+  (`NettyIdentities.canonicalName`: NFKC, then `toLowerCase(Locale.ROOT)`) is used for the conflict check and for
   `clientChannel(name)`/`firstChannel(name)`; `AuthType.canonicalName()` gives filters the same form. A second
   connection with the canonical name or effective UUID of an authenticated one is rejected (`identityPolicy`,
   default `IdentityPolicy.REJECT`; `REPLACE_OLD` closes the old connection). The client learns its effective
-  identity from the `AuthAcceptedPacket` (`Netty5Client.effectiveIdentity()`, `authenticationFuture()`).
+  identity from the `AuthAcceptedPacket` (`NettyClient.effectiveIdentity()`, `authenticationFuture()`).
 - **TLS.** Optional `sslContext` on server and client (new dependency `io.netty:netty-handler`). The client
   verifies the host name and sends its `AuthPacket` after the handshake; the handshake timeout
   (`handshakeTimeoutMillis`, default 10 s) is capped at the server's authentication timeout. Binding a

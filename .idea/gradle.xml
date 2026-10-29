@@ -8,8 +8,8 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/netty5-connection" />
-            <option value="$PROJECT_DIR$/netty5-demo" />
+            <option value="$PROJECT_DIR$/netty-connection" />
+            <option value="$PROJECT_DIR$/netty-demo" />
           </set>
         </option>
       </GradleProjectSettings>

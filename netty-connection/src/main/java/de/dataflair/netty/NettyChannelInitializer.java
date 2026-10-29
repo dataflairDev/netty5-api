@@ -1,9 +1,9 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@ package de.dataflair.netty5;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.common.codec.PacketDecoder;
-import de.dataflair.netty5.common.codec.PacketEncoder;
-import de.dataflair.netty5.common.codec.PacketRegistry;
+import de.dataflair.netty.common.codec.PacketDecoder;
+import de.dataflair.netty.common.codec.PacketEncoder;
+import de.dataflair.netty.common.codec.PacketRegistry;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.SimpleChannelInboundHandler;
-import de.dataflair.netty5.common.codec.Netty5FrameDecoder;
+import de.dataflair.netty.common.codec.NettyFrameDecoder;
 import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.ssl.SslHandler;
@@ -33,31 +33,31 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Function;
 
-public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channel> {
-    private final Netty5ClientChannel.Identity identity;
+public abstract class NettyChannelInitializer extends ChannelInitializer<Channel> {
+    private final NettyClientChannel.Identity identity;
     private final int maxFrameLength;
     private final int preAuthMaxFrameLength;
     private final PacketRegistry packetRegistry;
     private final boolean requireAuthentication;
     private @Nullable ChannelHandler firstHandler;
     private @Nullable Function<Channel, SslHandler> sslHandlerFactory;
-    private long maxOutboundBufferBytes = Netty5Component.DEFAULT_MAX_OUTBOUND_BUFFER_BYTES;
+    private long maxOutboundBufferBytes = NettyComponent.DEFAULT_MAX_OUTBOUND_BUFFER_BYTES;
     private boolean suspendReadWhenUnwritable = true;
 
-    public Netty5ChannelInitializer(Netty5ClientChannel.Identity identity) {
-        this(identity, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, null, false);
+    public NettyChannelInitializer(NettyClientChannel.Identity identity) {
+        this(identity, NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, null, false);
     }
 
     /**
-     * Uses {@link Netty5ChannelUtils#DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH} as frame limit before authentication.
+     * Uses {@link NettyChannelUtils#DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH} as frame limit before authentication.
      *
-     * @see #Netty5ChannelInitializer(Netty5ClientChannel.Identity, int, int, PacketRegistry, boolean)
+     * @see #NettyChannelInitializer(NettyClientChannel.Identity, int, int, PacketRegistry, boolean)
      */
-    public Netty5ChannelInitializer(@Nullable Netty5ClientChannel.Identity identity,
+    public NettyChannelInitializer(@Nullable NettyClientChannel.Identity identity,
                                     int maxFrameLength,
                                     @Nullable PacketRegistry packetRegistry,
                                     boolean requireAuthentication) {
-        this(identity, maxFrameLength, Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, packetRegistry,
+        this(identity, maxFrameLength, NettyChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH, packetRegistry,
                 requireAuthentication);
     }
 
@@ -70,7 +70,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
      * @param packetRegistry        registry used to resolve incoming packet classes, null for the default registry
      * @param requireAuthentication if true only the auth packet is accepted until the channel is authenticated
      */
-    public Netty5ChannelInitializer(@Nullable Netty5ClientChannel.Identity identity,
+    public NettyChannelInitializer(@Nullable NettyClientChannel.Identity identity,
                                     int maxFrameLength,
                                     int preAuthMaxFrameLength,
                                     @Nullable PacketRegistry packetRegistry,
@@ -92,7 +92,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
      * @param handler a (sharable) handler placed in front of every other handler, for example a connection
      *                limiter; null for none
      */
-    public Netty5ChannelInitializer firstHandler(@Nullable ChannelHandler handler) {
+    public NettyChannelInitializer firstHandler(@Nullable ChannelHandler handler) {
         this.firstHandler = handler;
         return this;
     }
@@ -100,7 +100,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
     /**
      * @param factory creates the {@link SslHandler} of a channel; null for plain TCP
      */
-    public Netty5ChannelInitializer sslHandlerFactory(@Nullable Function<Channel, SslHandler> factory) {
+    public NettyChannelInitializer sslHandlerFactory(@Nullable Function<Channel, SslHandler> factory) {
         this.sslHandlerFactory = factory;
         return this;
     }
@@ -108,7 +108,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
     /**
      * @param bytes hard limit of the outbound buffer, see {@link BackpressureHandler}
      */
-    public Netty5ChannelInitializer maxOutboundBufferBytes(long bytes) {
+    public NettyChannelInitializer maxOutboundBufferBytes(long bytes) {
         if (bytes <= 0) {
             throw new IllegalArgumentException("maxOutboundBufferBytes must be positive: " + bytes);
         }
@@ -120,7 +120,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
      * @param suspend true (default) to stop reading while the channel is unwritable; the client passes false, see
      *                {@link BackpressureHandler}
      */
-    public Netty5ChannelInitializer suspendReadWhenUnwritable(boolean suspend) {
+    public NettyChannelInitializer suspendReadWhenUnwritable(boolean suspend) {
         this.suspendReadWhenUnwritable = suspend;
         return this;
     }
@@ -135,7 +135,7 @@ public abstract class Netty5ChannelInitializer extends ChannelInitializer<Channe
             pipeline.addLast("ssl", sslHandlerFactory.apply(channel));
         }
         pipeline.addLast("backpressure", new BackpressureHandler(maxOutboundBufferBytes, suspendReadWhenUnwritable))
-                .addLast("frame-decoder", new Netty5FrameDecoder(maxFrameLength, preAuthMaxFrameLength,
+                .addLast("frame-decoder", new NettyFrameDecoder(maxFrameLength, preAuthMaxFrameLength,
                         requireAuthentication))
                 .addLast("packet-decoder", new PacketDecoder(identity, packetRegistry, requireAuthentication,
                         preAuthMaxFrameLength))

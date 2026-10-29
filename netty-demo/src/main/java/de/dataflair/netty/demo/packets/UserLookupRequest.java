@@ -1,7 +1,7 @@
-package de.dataflair.netty5.demo.packets;
+package de.dataflair.netty.demo.packets;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.RequestPacket;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.RequestPacket;
 import org.jetbrains.annotations.NotNull;
 
 /**

@@ -1,4 +1,4 @@
-# netty5-api
+# netty-api
 
 A small client/server packet library on top of Netty 4.2. You define packets as Java classes, the library frames,
 encodes and decodes them and routes them to listeners. On top of that it offers:
@@ -12,8 +12,8 @@ encodes and decodes them and routes them to listeners. On top of that it offers:
 - secure defaults: the server refuses to start without a connection filter, only registered packet classes
   are accepted, frames, connections, failed logins and outbound buffers are limited, and TLS is optional.
 
-The `netty5-demo` module contains a complete, runnable example
-(`de.dataflair.netty5.demo.DemoApplication`); the snippets below are taken from it.
+The `netty-demo` module contains a complete, runnable example
+(`de.dataflair.netty.demo.DemoApplication`); the snippets below are taken from it.
 
 ## Requirements
 
@@ -94,7 +94,7 @@ for request/response packets), not in a base class constructor. To decode a pack
 ### Server
 
 ```java
-var server = new Netty5Server("127.0.0.1", 9000);
+var server = new NettyServer("127.0.0.1", 9000);
 
 // configure everything before initialize()
 // allowlist mode is the default: only registered classes (and AuthPacket) can be received
@@ -105,10 +105,10 @@ server.preAuthMaxFrameLength(16 * 1024); // default 64 KiB
 server.authTimeoutMillis(5_000);         // default 10 s
 
 // the token is bound to the canonical form of the claimed name and compared in constant time
-var tokensByName = Map.of(Netty5Identities.canonicalName("demo-client"), System.getenv("NETTY5_DEMO_TOKEN"));
+var tokensByName = Map.of(NettyIdentities.canonicalName("demo-client"), System.getenv("NETTY_DEMO_TOKEN"));
 server.addFilter(new ConnectionFilter() {
     @Override
-    public boolean evaluateFilter(Netty5ClientChannel.AuthType auth) {
+    public boolean evaluateFilter(NettyClientChannel.AuthType auth) {
         var expected = tokensByName.get(auth.canonicalName());
         return expected != null
                 && ConnectionFilters.tokenEquals(expected, auth.authProperty().get("token")); // false closes
@@ -146,9 +146,9 @@ block. A filter that has to wait for a database or another service is an `AsyncC
 ### Client
 
 ```java
-var client = new Netty5Client("127.0.0.1", 9000,
-        new Netty5ClientChannel.Identity("demo-client", UUID.randomUUID()),
-        Map.of("token", System.getenv("NETTY5_DEMO_TOKEN")));
+var client = new NettyClient("127.0.0.1", 9000,
+        new NettyClientChannel.Identity("demo-client", UUID.randomUUID()),
+        Map.of("token", System.getenv("NETTY_DEMO_TOKEN")));
 client.packetRegistry(new PacketRegistry()
         .register(ChatMessagePacket.class, UserLookupRequest.class, UserLookupResponse.class));
 
@@ -173,10 +173,10 @@ pending bytes the connection is closed.
 ### Identity
 
 - The server does not trust the UUID a client sends. It derives the UUID from the **canonical name**:
-  `Netty5Identities.derivedUuid(name)` = `UUID.nameUUIDFromBytes("netty5-api:identity:" + canonicalName(name))`.
+  `NettyIdentities.derivedUuid(name)` = `UUID.nameUUIDFromBytes("netty-api:identity:" + canonicalName(name))`.
   `server.clientChannel(uuid)` therefore finds a client by this derived UUID; the client gets it from the
-  `AuthAcceptedPacket` (`client.effectiveIdentity()`), or computes it with `Netty5Identities.derivedUuid`.
-- The canonical name is `Netty5Identities.canonicalName(name)`: Unicode NFKC, then `toLowerCase(Locale.ROOT)`.
+  `AuthAcceptedPacket` (`client.effectiveIdentity()`), or computes it with `NettyIdentities.derivedUuid`.
+- The canonical name is `NettyIdentities.canonicalName(name)`: Unicode NFKC, then `toLowerCase(Locale.ROOT)`.
   `ſam`, `Sam` and `SAM` are one identity, the Kelvin sign in `\u212Aevin` becomes `kevin`, and the result does
   not depend on the default locale. `İlker` stays distinct from `ilker` (its canonical form keeps the combining
   dot). The conflict check of the `identityPolicy`, `clientChannel(name)` and `firstChannel(name)` all use it.
@@ -221,17 +221,17 @@ reconnecting when it is shut down.
 ### Run the demo
 
 ```
-./gradlew :netty5-demo:run
+./gradlew :netty-demo:run
 ```
 
 It starts a server and two clients (one with a wrong token) in one JVM, runs every step above once and exits.
-The token of the demo client is read from the environment variable `NETTY5_DEMO_TOKEN`; without it the demo
+The token of the demo client is read from the environment variable `NETTY_DEMO_TOKEN`; without it the demo
 falls back to a built-in token and logs a warning.
-`./gradlew :netty5-demo:test` runs the same flow as a test.
+`./gradlew :netty-demo:test` runs the same flow as a test.
 
 ## Security notes
 
-- **Fail-closed start.** `Netty5Server.initialize()` throws if no `ConnectionFilter` or `AsyncConnectionFilter`
+- **Fail-closed start.** `NettyServer.initialize()` throws if no `ConnectionFilter` or `AsyncConnectionFilter`
   is registered, unless `allowAnonymous(true)` is set (which is logged as a warning).
 - **Allowlist.** Incoming packets carry their class name. By default the `PacketRegistry` only accepts classes
   registered with `register(...)` plus `AuthPacket`; the built-in JSON packets have to be registered like any

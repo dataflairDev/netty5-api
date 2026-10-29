@@ -1,4 +1,4 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
 import io.netty.handler.codec.DecoderException;
 

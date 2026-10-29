@@ -1,9 +1,9 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
-import de.dataflair.netty5.client.Netty5Client;
-import de.dataflair.netty5.client.Netty5ClientHandler;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.server.Netty5ServerHandler;
+import de.dataflair.netty.client.NettyClient;
+import de.dataflair.netty.client.NettyClientHandler;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.server.NettyServerHandler;
 import io.netty.channel.embedded.EmbeddedChannel;
 import org.junit.jupiter.api.Test;
 
@@ -19,9 +19,9 @@ class HandlerExceptionTest {
 
     @Test
     void serverHandlerHandlesExceptionWithoutMessage() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         try {
-            var channel = new EmbeddedChannel(new Netty5ServerHandler(server));
+            var channel = new EmbeddedChannel(new NettyServerHandler(server));
             channel.pipeline().fireExceptionCaught(new RuntimeException());
             assertDoesNotThrow(channel::checkException);
             // fail-closed: an unexpected exception before authentication closes the connection
@@ -34,9 +34,9 @@ class HandlerExceptionTest {
 
     @Test
     void clientHandlerHandlesExceptionWithoutMessage() throws Exception {
-        var client = new Netty5Client("127.0.0.1", 1, new Netty5ClientChannel.Identity("c", UUID.randomUUID()), null);
+        var client = new NettyClient("127.0.0.1", 1, new NettyClientChannel.Identity("c", UUID.randomUUID()), null);
         try {
-            var channel = new EmbeddedChannel(new Netty5ClientHandler(client));
+            var channel = new EmbeddedChannel(new NettyClientHandler(client));
             channel.pipeline().fireExceptionCaught(new IllegalStateException((String) null));
             assertDoesNotThrow(channel::checkException);
             channel.finishAndReleaseAll();

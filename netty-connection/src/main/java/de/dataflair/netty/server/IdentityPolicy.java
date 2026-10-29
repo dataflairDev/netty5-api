@@ -1,4 +1,4 @@
-package de.dataflair.netty5.server;
+package de.dataflair.netty.server;
 
 /**
  * What the server does when a client authenticates with a name (case-insensitive) or UUID that an authenticated

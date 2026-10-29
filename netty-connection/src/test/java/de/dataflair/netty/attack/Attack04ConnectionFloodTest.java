@@ -1,4 +1,4 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
 import org.junit.jupiter.api.Test;
 

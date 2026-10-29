@@ -1,8 +1,8 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.common.packet.Packet;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -24,17 +24,17 @@ import java.nio.charset.StandardCharsets;
  */
 public final class PacketEncoder extends MessageToByteEncoder<Packet> {
     private static final Logger LOGGER = LoggerFactory.getLogger(PacketEncoder.class);
-    private final Netty5ClientChannel.Identity identity;
+    private final NettyClientChannel.Identity identity;
     private final int maxFrameLength;
 
-    public PacketEncoder(Netty5ClientChannel.Identity identity) {
-        this(identity, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH);
+    public PacketEncoder(NettyClientChannel.Identity identity) {
+        this(identity, NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH);
     }
 
     /**
      * @param maxFrameLength maximum frame length in bytes including the length field
      */
-    public PacketEncoder(Netty5ClientChannel.Identity identity, int maxFrameLength) {
+    public PacketEncoder(NettyClientChannel.Identity identity, int maxFrameLength) {
         super(Packet.class);
         if (maxFrameLength <= 0) {
             throw new IllegalArgumentException("maxFrameLength must be positive: " + maxFrameLength);

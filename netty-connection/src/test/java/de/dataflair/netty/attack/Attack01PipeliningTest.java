@@ -1,6 +1,6 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestPacket;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;

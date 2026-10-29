@@ -1,13 +1,13 @@
-package de.dataflair.netty5.common.packet;
+package de.dataflair.netty.common.packet;
 
-import de.dataflair.netty5.Netty5ChannelInitializer;
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.client.Netty5ClientPacketTransmitter;
-import de.dataflair.netty5.common.packet.json.JsonRespondPacket;
-import de.dataflair.netty5.server.Netty5ServerPacketTransmitter;
-import de.dataflair.netty5.testpackets.TestPacket;
-import de.dataflair.netty5.testpackets.TestRequestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.NettyChannelInitializer;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.client.NettyClientPacketTransmitter;
+import de.dataflair.netty.common.packet.json.JsonRespondPacket;
+import de.dataflair.netty.server.NettyServerPacketTransmitter;
+import de.dataflair.netty.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestRequestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.EventLoopGroup;
@@ -34,13 +34,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class TransmitterTest {
     private EventLoopGroup group;
     private BlockingQueue<Packet> sent;
-    private Netty5ClientPacketTransmitter transmitter;
+    private NettyClientPacketTransmitter transmitter;
 
     @BeforeEach
     void setUp() {
-        group = Netty5ChannelUtils.createEventLoopGroup(1);
+        group = NettyChannelUtils.createEventLoopGroup(1);
         sent = new LinkedBlockingQueue<>();
-        transmitter = new Netty5ClientPacketTransmitter(group, sent::add);
+        transmitter = new NettyClientPacketTransmitter(group, sent::add);
     }
 
     @AfterEach
@@ -209,7 +209,7 @@ class TransmitterTest {
      */
     @Test
     void serverTransmitterQueryIsUnsupported() {
-        var server = new Netty5ServerPacketTransmitter(group, p -> {
+        var server = new NettyServerPacketTransmitter(group, p -> {
         }, (a, b, c) -> {
         });
         var request = new TestRequestPacket("t", List.of());
@@ -224,8 +224,8 @@ class TransmitterTest {
      */
     @SuppressWarnings("unchecked")
     private static <P extends Packet> P overWire(Packet packet) {
-        var channel = new EmbeddedChannel(new Netty5ChannelInitializer(null, de.dataflair.netty5.Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
-                new de.dataflair.netty5.common.codec.PacketRegistry().allowAnyPacketClass(), false) {
+        var channel = new EmbeddedChannel(new NettyChannelInitializer(null, de.dataflair.netty.NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH,
+                new de.dataflair.netty.common.codec.PacketRegistry().allowAnyPacketClass(), false) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new SimpleChannelInboundHandler<Packet>() {
@@ -257,7 +257,7 @@ class TransmitterTest {
     @Test
     void middlemanForwardsReceivedRequestAndResponse() throws Exception {
         var upstreamSent = new LinkedBlockingQueue<Packet>();
-        var upstream = new Netty5ClientPacketTransmitter(group, upstreamSent::add);
+        var upstream = new NettyClientPacketTransmitter(group, upstreamSent::add);
 
         // upstream peer: answers every forwarded request with a response that went over the wire
         var upstreamPeer = Executors.newSingleThreadExecutor();

@@ -1,9 +1,9 @@
-package de.dataflair.netty5.common.packet;
+package de.dataflair.netty.common.packet;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package de.dataflair.netty5.common.packet;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
+import de.dataflair.netty.common.codec.CodecBuffer;
 import org.jetbrains.annotations.NotNull;
 
 /**

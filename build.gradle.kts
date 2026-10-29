@@ -10,7 +10,7 @@ allprojects {
     apply(plugin = "maven-publish")
     apply(plugin = "com.gradleup.shadow")
 
-    group = "de.dataflair.netty5-api"
+    group = "de.dataflair.netty-api"
     version = "2.0.0"
 
     repositories {

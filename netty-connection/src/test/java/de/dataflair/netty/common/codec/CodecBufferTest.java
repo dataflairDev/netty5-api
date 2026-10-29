@@ -1,7 +1,7 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
 import com.google.gson.JsonObject;
-import de.dataflair.netty5.Netty5ClientChannel;
+import de.dataflair.netty.NettyClientChannel;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -129,12 +129,12 @@ class CodecBufferTest {
 
     @Test
     void streamAndJsonRoundTrip() {
-        var identity = new Netty5ClientChannel.Identity("node", UUID.randomUUID());
+        var identity = new NettyClientChannel.Identity("node", UUID.randomUUID());
         var json = new JsonObject();
         json.addProperty("key", "<value>");
         var buffer = CodecBuffer.allocate().writeStream(identity).writeJsonObject(json);
 
-        var read = buffer.readStream(new Netty5ClientChannel.Identity());
+        var read = buffer.readStream(new NettyClientChannel.Identity());
         assertEquals(identity.name(), read.name());
         assertEquals(identity.uuid(), read.uuid());
         assertEquals(json, buffer.readJsonObject());

@@ -1,4 +1,4 @@
-package de.dataflair.netty5.demo;
+package de.dataflair.netty.demo;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

@@ -1,19 +1,19 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
-import de.dataflair.netty5.Netty5ChannelInitializer;
-import de.dataflair.netty5.Netty5ChannelUtils;
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.common.packet.json.JsonPacket;
-import de.dataflair.netty5.common.packet.json.JsonRequestPacket;
-import de.dataflair.netty5.common.packet.json.JsonRespondPacket;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.testpackets.ProbeFlags;
-import de.dataflair.netty5.testpackets.TestPacket;
-import de.dataflair.netty5.testpackets.TestQueryPacket;
-import de.dataflair.netty5.testpackets.TestRequestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.NettyChannelInitializer;
+import de.dataflair.netty.NettyChannelUtils;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.common.packet.json.JsonPacket;
+import de.dataflair.netty.common.packet.json.JsonRequestPacket;
+import de.dataflair.netty.common.packet.json.JsonRespondPacket;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.testpackets.ProbeFlags;
+import de.dataflair.netty.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestQueryPacket;
+import de.dataflair.netty.testpackets.TestRequestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PacketCodecTest {
 
     static EmbeddedChannel channel(int maxFrameLength, PacketRegistry registry, boolean requireAuthentication) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, maxFrameLength, registry, requireAuthentication) {
+        return new EmbeddedChannel(new NettyChannelInitializer(null, maxFrameLength, registry, requireAuthentication) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new SimpleChannelInboundHandler<Packet>() {
@@ -47,7 +47,7 @@ class PacketCodecTest {
     }
 
     static EmbeddedChannel channel() {
-        return channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), false);
+        return channel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), false);
     }
 
     /**
@@ -98,7 +98,7 @@ class PacketCodecTest {
     @Test
     void builtInPacketsRoundTrip() {
         var channel = channel();
-        var identity = new Netty5ClientChannel.Identity("client", UUID.randomUUID());
+        var identity = new NettyClientChannel.Identity("client", UUID.randomUUID());
         AuthPacket auth = roundTrip(channel, new AuthPacket(identity, Map.of("token", "secret")));
         assertEquals("client", auth.identity().name());
         assertEquals(identity.uuid(), auth.identity().uuid());
@@ -173,9 +173,9 @@ class PacketCodecTest {
         assertThrows(PacketRejectedException.class,
                 () -> channel.writeInbound(frame("java.lang.String", new byte[0])));
         assertThrows(PacketRejectedException.class,
-                () -> channel.writeInbound(frame("de.dataflair.netty5.testpackets.NotAPacket", new byte[0])));
+                () -> channel.writeInbound(frame("de.dataflair.netty.testpackets.NotAPacket", new byte[0])));
         assertThrows(PacketRejectedException.class,
-                () -> channel.writeInbound(frame("de.dataflair.netty5.testpackets.AbstractProbePacket", new byte[0])));
+                () -> channel.writeInbound(frame("de.dataflair.netty.testpackets.AbstractProbePacket", new byte[0])));
         assertNull(channel.readInbound());
         assertFalse(ProbeFlags.NOT_A_PACKET_INITIALIZED.get(), "NotAPacket must not be initialised");
         assertFalse(ProbeFlags.ABSTRACT_PACKET_INITIALIZED.get(), "abstract packet must not be initialised");
@@ -187,17 +187,17 @@ class PacketCodecTest {
      */
     @Test
     void onlyAuthPacketBeforeAuthentication() {
-        var channel = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
+        var channel = channel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
         assertThrows(PacketRejectedException.class,
-                () -> channel.writeInbound(frame("de.dataflair.netty5.testpackets.PreAuthProbePacket", new byte[0])));
+                () -> channel.writeInbound(frame("de.dataflair.netty.testpackets.PreAuthProbePacket", new byte[0])));
         assertFalse(ProbeFlags.PRE_AUTH_PACKET_INITIALIZED.get(), "packet before auth must not be initialised");
         assertFalse(channel.isOpen(), "channel must be closed");
         channel.finishAndReleaseAll();
 
-        var second = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
-        AuthPacket auth = roundTrip(second, new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
+        var second = channel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
+        AuthPacket auth = roundTrip(second, new AuthPacket(new NettyClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
         assertEquals("c", auth.identity().name());
-        second.attr(Netty5ChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
+        second.attr(NettyChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
         TestPacket afterAuth = roundTrip(second, new TestPacket("ok", 1));
         assertEquals("ok", afterAuth.message());
         second.finishAndReleaseAll();
@@ -209,9 +209,9 @@ class PacketCodecTest {
     @Test
     void restrictedRegistryOnlyAcceptsRegisteredPackets() {
         var registry = new PacketRegistry();
-        var channel = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, registry, false);
+        var channel = channel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, registry, false);
         assertThrows(PacketRejectedException.class,
-                () -> channel.writeInbound(frame("de.dataflair.netty5.testpackets.RestrictedProbePacket", new byte[0])));
+                () -> channel.writeInbound(frame("de.dataflair.netty.testpackets.RestrictedProbePacket", new byte[0])));
         assertFalse(ProbeFlags.RESTRICTED_PACKET_INITIALIZED.get());
         assertThrows(PacketRejectedException.class, () -> roundTrip(channel, new TestPacket("x", 1)));
 
@@ -221,7 +221,7 @@ class PacketCodecTest {
         // the JSON packets are not registered by default in allowlist mode
         assertThrows(PacketRejectedException.class, () -> roundTrip(channel, new JsonPacket("{}")));
         assertThrows(IllegalArgumentException.class,
-                () -> registry.register(de.dataflair.netty5.testpackets.AbstractProbePacket.class));
+                () -> registry.register(de.dataflair.netty.testpackets.AbstractProbePacket.class));
         channel.finishAndReleaseAll();
     }
 
@@ -230,8 +230,8 @@ class PacketCodecTest {
      */
     @Test
     void tooLargeFrameIsRejected() {
-        assertEquals(16 * 1024 * 1024, Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH);
-        assertEquals(16 * 1024 * 1024, new Netty5Server("127.0.0.1", 0).maxFrameLength());
+        assertEquals(16 * 1024 * 1024, NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH);
+        assertEquals(16 * 1024 * 1024, new NettyServer("127.0.0.1", 0).maxFrameLength());
 
         var channel = channel(64, new PacketRegistry().allowAnyPacketClass(), false);
         assertThrows(TooLongFrameException.class,
@@ -270,7 +270,7 @@ class PacketCodecTest {
     }
 
     static EmbeddedChannel preAuthChannel(int maxFrameLength, int preAuthMaxFrameLength) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, maxFrameLength, preAuthMaxFrameLength,
+        return new EmbeddedChannel(new NettyChannelInitializer(null, maxFrameLength, preAuthMaxFrameLength,
                 new PacketRegistry().allowAnyPacketClass(), true) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
@@ -290,22 +290,22 @@ class PacketCodecTest {
      */
     @Test
     void preAuthFrameLimitClosesChannel() {
-        assertEquals(64 * 1024, Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH);
-        assertEquals(64 * 1024, new Netty5Server("127.0.0.1", 0).preAuthMaxFrameLength());
+        assertEquals(64 * 1024, NettyChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH);
+        assertEquals(64 * 1024, new NettyServer("127.0.0.1", 0).preAuthMaxFrameLength());
 
-        var channel = preAuthChannel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, 256);
-        var bigAuth = new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()),
+        var channel = preAuthChannel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, 256);
+        var bigAuth = new AuthPacket(new NettyClientChannel.Identity("c", UUID.randomUUID()),
                 Map.of("token", "x".repeat(512)));
         // rejected by the frame decoder as soon as the length field has arrived, before the content is buffered
         assertThrows(io.netty.handler.codec.TooLongFrameException.class, () -> roundTrip(channel, bigAuth));
         assertFalse(channel.isOpen(), "channel must be closed");
         channel.finishAndReleaseAll();
 
-        var authenticated = preAuthChannel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, 256);
+        var authenticated = preAuthChannel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, 256);
         AuthPacket smallAuth = roundTrip(authenticated,
-                new AuthPacket(new Netty5ClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
+                new AuthPacket(new NettyClientChannel.Identity("c", UUID.randomUUID()), Map.of()));
         assertEquals("c", smallAuth.identity().name());
-        authenticated.attr(Netty5ChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
+        authenticated.attr(NettyChannelUtils.AUTHENTICATED).set(Boolean.TRUE);
         TestPacket large = roundTrip(authenticated, new TestPacket("y".repeat(1024), 3));
         assertEquals(1024, large.message().length());
         assertTrue(authenticated.isOpen());
@@ -317,7 +317,7 @@ class PacketCodecTest {
      */
     @Test
     void authPacketWithTooManyPropertiesIsRejected() {
-        var identity = new Netty5ClientChannel.Identity("c", UUID.randomUUID());
+        var identity = new NettyClientChannel.Identity("c", UUID.randomUUID());
         var tooMany = new java.util.HashMap<String, String>();
         for (int i = 0; i <= AuthPacket.MAX_PROPERTIES; i++) {
             tooMany.put("k" + i, "v");
@@ -332,7 +332,7 @@ class PacketCodecTest {
         var bytes = new byte[content.origin().readableBytes()];
         content.origin().readBytes(bytes);
         content.origin().release();
-        var channel = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
+        var channel = channel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
         assertThrows(PacketRejectedException.class,
                 () -> channel.writeInbound(frame(AuthPacket.class.getName(), bytes)));
         assertNull(channel.readInbound());
@@ -342,7 +342,7 @@ class PacketCodecTest {
         for (int i = 0; i < AuthPacket.MAX_PROPERTIES; i++) {
             max.put("k" + i, "v");
         }
-        var accepted = channel(Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
+        var accepted = channel(NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH, new PacketRegistry().allowAnyPacketClass(), true);
         AuthPacket decoded = roundTrip(accepted, new AuthPacket(identity, max));
         assertEquals(AuthPacket.MAX_PROPERTIES, decoded.properties().size());
         accepted.finishAndReleaseAll();
@@ -378,14 +378,14 @@ class PacketCodecTest {
         var registry = new PacketRegistry().allowAnyPacketClass();
         assertFalse(registry.restrictToRegistered());
         for (var name : List.of("[Lfoo;", "[L" + TestPacket.class.getName() + ";", "[I", "int", "void",
-                "de.dataflair.netty5.testpackets.NonPublicProbePacket")) {
+                "de.dataflair.netty.testpackets.NonPublicProbePacket")) {
             assertThrows(PacketRejectedException.class, () -> registry.resolve(name), name);
         }
         var channel = channel();
         assertThrows(PacketRejectedException.class, () -> channel.writeInbound(frame("[Lfoo;", new byte[0])));
         assertThrows(PacketRejectedException.class, () -> channel.writeInbound(frame("int", new byte[0])));
         assertThrows(PacketRejectedException.class, () -> channel.writeInbound(
-                frame("de.dataflair.netty5.testpackets.NonPublicProbePacket", new byte[0])));
+                frame("de.dataflair.netty.testpackets.NonPublicProbePacket", new byte[0])));
         assertNull(channel.readInbound());
         assertFalse(ProbeFlags.NON_PUBLIC_PACKET_INITIALIZED.get(), "non-public packet must not be initialised");
         channel.finishAndReleaseAll();

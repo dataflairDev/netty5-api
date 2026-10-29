@@ -1,10 +1,10 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.Netty5Identities;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.filter.AsyncConnectionFilter;
-import de.dataflair.netty5.server.IdentityPolicy;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.NettyIdentities;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.filter.AsyncConnectionFilter;
+import de.dataflair.netty.server.IdentityPolicy;
 import io.netty.handler.ssl.SslContextBuilder;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static de.dataflair.netty5.attack.SecurityHardeningTest.closedWithin;
+import static de.dataflair.netty.attack.SecurityHardeningTest.closedWithin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -54,8 +54,8 @@ class IdentityAndAbuseLimitsTest {
             var bobChannel = harness.awaitAuthenticated("bob", 5_000);
 
             assertFalse(closedWithin(alice, 500), "alice must not be replaced");
-            assertEquals(Netty5Identities.derivedUuid("bob"), bobChannel.identity().uuid());
-            var aliceChannel = harness.server().clientChannel(Netty5Identities.derivedUuid("alice"));
+            assertEquals(NettyIdentities.derivedUuid("bob"), bobChannel.identity().uuid());
+            var aliceChannel = harness.server().clientChannel(NettyIdentities.derivedUuid("alice"));
             assertNotNull(aliceChannel);
             assertEquals("alice", aliceChannel.identity().name());
             assertTrue(aliceChannel.channel().isActive());
@@ -78,7 +78,7 @@ class IdentityAndAbuseLimitsTest {
             harness.awaitAuthenticated("alice", 5_000);
             assertFalse(closedWithin(alice, 300), "alice must not be blocked");
             assertEquals("alice",
-                    harness.server().clientChannel(Netty5Identities.derivedUuid("alice")).identity().name());
+                    harness.server().clientChannel(NettyIdentities.derivedUuid("alice")).identity().name());
         } finally {
             harness.stop();
         }
@@ -96,12 +96,12 @@ class IdentityAndAbuseLimitsTest {
             var frame = in.readNBytes(in.readInt());
             var data = new java.io.DataInputStream(new java.io.ByteArrayInputStream(frame));
             var className = new String(data.readNBytes(data.readInt()), java.nio.charset.StandardCharsets.UTF_8);
-            assertEquals(de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket.class.getName(), className);
+            assertEquals(de.dataflair.netty.common.packet.auth.AuthAcceptedPacket.class.getName(), className);
             data.readInt(); // content length
             var name = new String(data.readNBytes(data.readInt()), java.nio.charset.StandardCharsets.UTF_8);
             var uuid = new UUID(data.readLong(), data.readLong());
             assertEquals("Dave", name);
-            assertEquals(Netty5Identities.derivedUuid("dave"), uuid);
+            assertEquals(NettyIdentities.derivedUuid("dave"), uuid);
         } finally {
             harness.stop();
         }
@@ -158,7 +158,7 @@ class IdentityAndAbuseLimitsTest {
             harness.awaitAuthenticated("ilker", 5_000);
             assertEquals("İlker", harness.server().firstChannel("İLKER").identity().name());
             assertEquals("ilker", harness.server().firstChannel("ILKER").identity().name());
-            assertNotEquals(Netty5Identities.derivedUuid("İlker"), Netty5Identities.derivedUuid("ilker"));
+            assertNotEquals(NettyIdentities.derivedUuid("İlker"), NettyIdentities.derivedUuid("ilker"));
         } finally {
             harness.stop();
         }
@@ -176,7 +176,7 @@ class IdentityAndAbuseLimitsTest {
             server.maxNewConnectionsPerPrefix(0);
             server.addFilter(new AsyncConnectionFilter() {
                 @Override
-                public @NotNull CompletionStage<Boolean> evaluateAsync(Netty5ClientChannel.@NotNull AuthType auth) {
+                public @NotNull CompletionStage<Boolean> evaluateAsync(NettyClientChannel.@NotNull AuthType auth) {
                     filterCalls.incrementAndGet();
                     var result = new CompletableFuture<Boolean>();
                     executor.schedule(() -> result.complete(false), 300, TimeUnit.MILLISECONDS);

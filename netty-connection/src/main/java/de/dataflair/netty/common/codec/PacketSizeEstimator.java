@@ -1,6 +1,6 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.common.packet.Packet;
 import io.netty.channel.DefaultMessageSizeEstimator;
 import io.netty.channel.MessageSizeEstimator;
 

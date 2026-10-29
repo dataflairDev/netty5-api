@@ -1,9 +1,9 @@
-package de.dataflair.netty5.client;
+package de.dataflair.netty.client;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,22 +18,22 @@ package de.dataflair.netty5.client;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.common.packet.Netty5PacketTransmitter;
-import de.dataflair.netty5.common.packet.Packet;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.common.packet.NettyPacketTransmitter;
+import de.dataflair.netty.common.packet.Packet;
 import io.netty.channel.EventLoopGroup;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Consumer;
 
-public final class Netty5ClientPacketTransmitter extends Netty5PacketTransmitter {
-    public Netty5ClientPacketTransmitter(@NotNull EventLoopGroup eventExecutors,
+public final class NettyClientPacketTransmitter extends NettyPacketTransmitter {
+    public NettyClientPacketTransmitter(@NotNull EventLoopGroup eventExecutors,
                                          @NotNull Consumer<Packet> packetConsumer) {
         super(eventExecutors, packetConsumer);
     }
 
     @Override
-    public void callActions(@NotNull Packet packet, @Nullable Netty5ClientChannel sender) {
+    public void callActions(@NotNull Packet packet, @Nullable NettyClientChannel sender) {
     }
 }

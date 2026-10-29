@@ -5,9 +5,9 @@
       <option name="isIgnoringEnabled" value="true" />
       <option name="ignoredModules">
         <list>
-          <option value="netty5-api.netty5-connection" />
-          <option value="netty5-api.netty5-connection" />
-          <option value="netty5-api.netty5-connection" />
+          <option value="netty-api.netty-connection" />
+          <option value="netty-api.netty-connection" />
+          <option value="netty-api.netty-connection" />
         </list>
       </option>
       <option name="ignoredPackages">

@@ -1,12 +1,12 @@
-package de.dataflair.netty5.common.codec;
+package de.dataflair.netty.common.codec;
 
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.common.packet.auth.AuthAcceptedPacket;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.common.packet.auth.KeepAlivePacket;
-import de.dataflair.netty5.common.packet.json.JsonPacket;
-import de.dataflair.netty5.common.packet.json.JsonRequestPacket;
-import de.dataflair.netty5.common.packet.json.JsonRespondPacket;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.common.packet.auth.AuthAcceptedPacket;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.common.packet.auth.KeepAlivePacket;
+import de.dataflair.netty.common.packet.json.JsonPacket;
+import de.dataflair.netty.common.packet.json.JsonRequestPacket;
+import de.dataflair.netty.common.packet.json.JsonRespondPacket;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Modifier;

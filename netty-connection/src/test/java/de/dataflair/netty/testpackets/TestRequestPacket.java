@@ -1,7 +1,7 @@
-package de.dataflair.netty5.testpackets;
+package de.dataflair.netty.testpackets;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.RequestPacket;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.RequestPacket;
 
 import java.util.ArrayList;
 import java.util.List;

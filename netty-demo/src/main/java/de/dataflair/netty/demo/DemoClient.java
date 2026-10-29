@@ -1,10 +1,10 @@
-package de.dataflair.netty5.demo;
+package de.dataflair.netty.demo;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.client.Netty5Client;
-import de.dataflair.netty5.demo.packets.ChatMessagePacket;
-import de.dataflair.netty5.demo.packets.UserLookupRequest;
-import de.dataflair.netty5.demo.packets.UserLookupResponse;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.client.NettyClient;
+import de.dataflair.netty.demo.packets.ChatMessagePacket;
+import de.dataflair.netty.demo.packets.UserLookupRequest;
+import de.dataflair.netty.demo.packets.UserLookupResponse;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -20,12 +20,12 @@ import java.util.concurrent.TimeUnit;
  * reconnecting until it is shut down.
  */
 public final class DemoClient {
-    private final Netty5Client client;
+    private final NettyClient client;
     private final CompletableFuture<ChatMessagePacket> welcome = new CompletableFuture<>();
 
     public DemoClient(@NotNull String host, int port, @NotNull String name, @NotNull String token) {
-        this.client = new Netty5Client(host, port,
-                new Netty5ClientChannel.Identity(name, UUID.randomUUID()),
+        this.client = new NettyClient(host, port,
+                new NettyClientChannel.Identity(name, UUID.randomUUID()),
                 DemoServer.authProperties(token));
 
         // configure before initialize()
@@ -91,7 +91,7 @@ public final class DemoClient {
         client.shutdownGracefully(0, 5, TimeUnit.SECONDS).await(10, TimeUnit.SECONDS);
     }
 
-    public Netty5Client client() {
+    public NettyClient client() {
         return client;
     }
 

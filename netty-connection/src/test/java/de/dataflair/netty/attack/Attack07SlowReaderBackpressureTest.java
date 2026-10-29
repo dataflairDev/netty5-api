@@ -1,7 +1,7 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.testpackets.TestPacket;
 import org.junit.jupiter.api.Test;
 
 import java.net.Socket;
@@ -29,7 +29,7 @@ class Attack07SlowReaderBackpressureTest {
         try {
             socket = harness.connect();
             AttackHarness.send(socket, AttackHarness.authFrame("slow", AttackHarness.TOKEN));
-            Netty5ClientChannel serverSide = harness.awaitAuthenticated("slow", 5_000);
+            NettyClientChannel serverSide = harness.awaitAuthenticated("slow", 5_000);
             var nettyChannel = serverSide.channel();
 
             var payload = "x".repeat(8 * 1024); // ~8 KiB per echoed packet

@@ -1,9 +1,9 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
 
 
 /*
- * Copyright 2023-2024 netty5-api contributors
+ * Copyright 2023-2024 netty-api contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@ package de.dataflair.netty5;
  * limitations under the License.
  */
 
-import de.dataflair.netty5.actions.Action;
-import de.dataflair.netty5.common.codec.PacketRegistry;
+import de.dataflair.netty.actions.Action;
+import de.dataflair.netty.common.codec.PacketRegistry;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.ssl.SslContext;
-import de.dataflair.netty5.common.log.SafeLog;
+import de.dataflair.netty.common.log.SafeLog;
 import io.netty.util.concurrent.Future;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -40,7 +40,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 @Getter
-public abstract class Netty5Component {
+public abstract class NettyComponent {
     /**
      * Default TLS handshake timeout in milliseconds.
      */
@@ -58,7 +58,7 @@ public abstract class Netty5Component {
      * Default number of rejected packets after which an authenticated connection is closed.
      */
     public static final int DEFAULT_MAX_REJECTED_PACKETS = 16;
-    private static final Logger LOGGER = LoggerFactory.getLogger(Netty5Component.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyComponent.class);
 
     @Setter(AccessLevel.PROTECTED)
     private volatile CommunicationFuture<Void> connectionFuture = new CommunicationFuture<>();
@@ -76,13 +76,13 @@ public abstract class Netty5Component {
      * Maximum accepted frame length in bytes, default 16 MiB. Must be set before {@link #initialize()}.
      */
     @Setter
-    private volatile int maxFrameLength = Netty5ChannelUtils.DEFAULT_MAX_FRAME_LENGTH;
+    private volatile int maxFrameLength = NettyChannelUtils.DEFAULT_MAX_FRAME_LENGTH;
     /**
      * Maximum accepted frame length in bytes while a channel that requires authentication is not yet
      * authenticated, default 64 KiB. Only used by the server. Must be set before {@link #initialize()}.
      */
     @Setter
-    private volatile int preAuthMaxFrameLength = Netty5ChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH;
+    private volatile int preAuthMaxFrameLength = NettyChannelUtils.DEFAULT_PRE_AUTH_MAX_FRAME_LENGTH;
     /**
      * Registry used to resolve incoming packet classes. Must be set before {@link #initialize()}.
      */
@@ -121,8 +121,8 @@ public abstract class Netty5Component {
     @Setter
     private volatile int maxRejectedPackets = DEFAULT_MAX_REJECTED_PACKETS;
 
-    public Netty5Component(int bossGroupThreads, @NotNull String hostname, int port) {
-        this.bossGroup = Netty5ChannelUtils.createEventLoopGroup(bossGroupThreads);
+    public NettyComponent(int bossGroupThreads, @NotNull String hostname, int port) {
+        this.bossGroup = NettyChannelUtils.createEventLoopGroup(bossGroupThreads);
         this.hostname = hostname;
         this.port = port;
     }
@@ -154,7 +154,7 @@ public abstract class Netty5Component {
         };
     }
 
-    public <T extends Action<?>> Netty5Component addAction(@NotNull T action) {
+    public <T extends Action<?>> NettyComponent addAction(@NotNull T action) {
         actions.add(action);
         return this;
     }

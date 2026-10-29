@@ -1,14 +1,14 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
-import de.dataflair.netty5.client.Netty5Client;
-import de.dataflair.netty5.common.codec.PacketRegistry;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.common.packet.json.JsonPacket;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.testpackets.TestPacket;
-import de.dataflair.netty5.testpackets.TestRequestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.client.NettyClient;
+import de.dataflair.netty.common.codec.PacketRegistry;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.common.packet.json.JsonPacket;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestRequestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
@@ -79,7 +79,7 @@ class LeakTest {
     }
 
     private static EmbeddedChannel codecChannel(boolean requireAuthentication) {
-        return new EmbeddedChannel(new Netty5ChannelInitializer(null, 1024, new PacketRegistry().allowAnyPacketClass(), requireAuthentication) {
+        return new EmbeddedChannel(new NettyChannelInitializer(null, 1024, new PacketRegistry().allowAnyPacketClass(), requireAuthentication) {
             @Override
             public SimpleChannelInboundHandler<?> handler() {
                 return new SimpleChannelInboundHandler<Packet>() {
@@ -143,13 +143,13 @@ class LeakTest {
     }
 
     private static void networkWorkload() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         server.allowAnonymous(true);
         server.packetRegistry(new PacketRegistry().allowAnyPacketClass());
         server.initialize();
         server.connectionFuture().get(5, TimeUnit.SECONDS);
-        var client = new Netty5Client("127.0.0.1", server.localAddress().getPort(),
-                new Netty5ClientChannel.Identity("leak", UUID.randomUUID()), Map.of());
+        var client = new NettyClient("127.0.0.1", server.localAddress().getPort(),
+                new NettyClientChannel.Identity("leak", UUID.randomUUID()), Map.of());
         client.packetRegistry(new PacketRegistry().allowAnyPacketClass());
         try {
             server.packetTransmitter().listen(TestPacket.class, (sender, packet) -> sender.sendPacket(packet));

@@ -1,6 +1,6 @@
-package de.dataflair.netty5.common.packet;
+package de.dataflair.netty.common.packet;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
+import de.dataflair.netty.common.codec.CodecBuffer;
 import lombok.experimental.UtilityClass;
 import org.jetbrains.annotations.NotNull;
 

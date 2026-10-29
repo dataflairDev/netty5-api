@@ -1,8 +1,8 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
-import de.dataflair.netty5.common.codec.PacketSizeEstimator;
-import de.dataflair.netty5.common.log.SafeLog;
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.common.codec.PacketSizeEstimator;
+import de.dataflair.netty.common.log.SafeLog;
+import de.dataflair.netty.testpackets.TestPacket;
 import io.netty.buffer.Unpooled;
 import org.junit.jupiter.api.Test;
 
@@ -16,33 +16,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Canonical names, derived UUIDs, the packet size estimator and the channel independent log throttle.
  */
-class Netty5IdentitiesTest {
+class NettyIdentitiesTest {
 
     @Test
     void compatibilityCharactersFoldToOneCanonicalName() {
-        assertEquals("sam", Netty5Identities.canonicalName("ſam"));
-        assertTrue(Netty5Identities.sameName("ſam", "sam"));
-        assertEquals("kevin", Netty5Identities.canonicalName("Kevin"));
-        assertTrue(Netty5Identities.sameName("Kevin", "kevin"));
-        assertTrue(Netty5Identities.sameName("ALICE", "alice"));
-        assertEquals(Netty5Identities.derivedUuid("ſam"), Netty5Identities.derivedUuid("SAM"));
-        assertEquals(Netty5Identities.derivedUuid("Kevin"), Netty5Identities.derivedUuid("kevin"));
+        assertEquals("sam", NettyIdentities.canonicalName("ſam"));
+        assertTrue(NettyIdentities.sameName("ſam", "sam"));
+        assertEquals("kevin", NettyIdentities.canonicalName("Kevin"));
+        assertTrue(NettyIdentities.sameName("Kevin", "kevin"));
+        assertTrue(NettyIdentities.sameName("ALICE", "alice"));
+        assertEquals(NettyIdentities.derivedUuid("ſam"), NettyIdentities.derivedUuid("SAM"));
+        assertEquals(NettyIdentities.derivedUuid("Kevin"), NettyIdentities.derivedUuid("kevin"));
     }
 
     @Test
     void dottedCapitalIStaysDistinctAndDoesNotDependOnTheLocale() {
         // equalsIgnoreCase folds İ to i character by character; the canonical form keeps the combining dot
         assertTrue("İlker".equalsIgnoreCase("ilker"));
-        assertEquals("i̇lker", Netty5Identities.canonicalName("İlker"));
-        assertFalse(Netty5Identities.sameName("İlker", "ilker"));
-        assertNotEquals(Netty5Identities.derivedUuid("İlker"), Netty5Identities.derivedUuid("ilker"));
+        assertEquals("i̇lker", NettyIdentities.canonicalName("İlker"));
+        assertFalse(NettyIdentities.sameName("İlker", "ilker"));
+        assertNotEquals(NettyIdentities.derivedUuid("İlker"), NettyIdentities.derivedUuid("ilker"));
 
         var previous = Locale.getDefault();
         try {
             Locale.setDefault(Locale.forLanguageTag("tr-TR"));
             // with toLowerCase() the Turkish locale would turn "I" into a dotless "ı"
-            assertEquals("ilker", Netty5Identities.canonicalName("ILKER"));
-            assertEquals("i̇lker", Netty5Identities.canonicalName("İlker"));
+            assertEquals("ilker", NettyIdentities.canonicalName("ILKER"));
+            assertEquals("i̇lker", NettyIdentities.canonicalName("İlker"));
         } finally {
             Locale.setDefault(previous);
         }
@@ -50,11 +50,11 @@ class Netty5IdentitiesTest {
 
     @Test
     void derivedUuidIsStableAndNamespaced() {
-        assertEquals(Netty5Identities.derivedUuid("bob"), Netty5Identities.derivedUuid("Bob"));
-        assertNotEquals(Netty5Identities.derivedUuid("bob"), Netty5Identities.derivedUuid("alice"));
+        assertEquals(NettyIdentities.derivedUuid("bob"), NettyIdentities.derivedUuid("Bob"));
+        assertNotEquals(NettyIdentities.derivedUuid("bob"), NettyIdentities.derivedUuid("alice"));
         assertNotEquals(java.util.UUID.nameUUIDFromBytes("bob".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                Netty5Identities.derivedUuid("bob"));
-        assertEquals(3, Netty5Identities.derivedUuid("bob").version());
+                NettyIdentities.derivedUuid("bob"));
+        assertEquals(3, NettyIdentities.derivedUuid("bob").version());
     }
 
     @Test

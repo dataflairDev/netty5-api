@@ -1,7 +1,7 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.testpackets.TestPacket;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.testpackets.TestPacket;
 import org.junit.jupiter.api.Test;
 
 import java.net.Socket;

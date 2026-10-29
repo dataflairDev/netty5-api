@@ -1,4 +1,4 @@
-package de.dataflair.netty5.server;
+package de.dataflair.netty.server;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -34,8 +34,8 @@ public final class ConnectionLimiter extends ChannelInboundHandlerAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionLimiter.class);
     private static final long LOG_INTERVAL_MILLIS = 1_000;
     private static final AttributeKey<AtomicBoolean> PRE_AUTH_SLOT =
-            AttributeKey.valueOf("netty5-api.pre-auth-slot");
-    private static final AttributeKey<Boolean> ADMITTED = AttributeKey.valueOf("netty5-api.admitted");
+            AttributeKey.valueOf("netty-api.pre-auth-slot");
+    private static final AttributeKey<Boolean> ADMITTED = AttributeKey.valueOf("netty-api.admitted");
 
     private final int maxConnections;
     private final int maxConnectionsPerAddress;

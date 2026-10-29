@@ -1,16 +1,16 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.client.Netty5Client;
-import de.dataflair.netty5.common.codec.PacketRegistry;
-import de.dataflair.netty5.common.packet.auth.AuthPacket;
-import de.dataflair.netty5.filter.AsyncConnectionFilter;
-import de.dataflair.netty5.filter.ConnectionFilter;
-import de.dataflair.netty5.filter.ConnectionFilters;
-import de.dataflair.netty5.server.IdentityPolicy;
-import de.dataflair.netty5.server.Netty5Server;
-import de.dataflair.netty5.testpackets.TestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.client.NettyClient;
+import de.dataflair.netty.common.codec.PacketRegistry;
+import de.dataflair.netty.common.packet.auth.AuthPacket;
+import de.dataflair.netty.filter.AsyncConnectionFilter;
+import de.dataflair.netty.filter.ConnectionFilter;
+import de.dataflair.netty.filter.ConnectionFilters;
+import de.dataflair.netty.server.IdentityPolicy;
+import de.dataflair.netty.server.NettyServer;
+import de.dataflair.netty.testpackets.TestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 import io.netty.handler.ssl.SslContextBuilder;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,7 @@ class SecurityHardeningTest {
 
     @Test
     void serverWithoutConnectionFilterRefusesToStart() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         try {
             var error = assertThrows(IllegalStateException.class, server::initialize);
             assertTrue(error.getMessage().contains("allowAnonymous"));
@@ -61,7 +61,7 @@ class SecurityHardeningTest {
 
     @Test
     void serverWithAllowAnonymousStarts() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         try {
             server.allowAnonymous(true);
             server.initialize();
@@ -163,7 +163,7 @@ class SecurityHardeningTest {
             server.maxAuthFailuresPerMinute(3);
             server.addFilter(new ConnectionFilter() {
                 @Override
-                public boolean evaluateFilter(Netty5ClientChannel.@NotNull AuthType object) {
+                public boolean evaluateFilter(NettyClientChannel.@NotNull AuthType object) {
                     filterCalls.incrementAndGet();
                     return true;
                 }
@@ -193,7 +193,7 @@ class SecurityHardeningTest {
         var executor = Executors.newSingleThreadScheduledExecutor();
         var harness = AttackHarness.start(true, 10_000, server -> server.addFilter(new AsyncConnectionFilter() {
             @Override
-            public @NotNull CompletionStage<Boolean> evaluateAsync(Netty5ClientChannel.@NotNull AuthType auth) {
+            public @NotNull CompletionStage<Boolean> evaluateAsync(NettyClientChannel.@NotNull AuthType auth) {
                 var result = new CompletableFuture<Boolean>();
                 executor.schedule(() -> result.complete(
                         !"denied".equals(auth.clientChannel().identity().name())), 200, TimeUnit.MILLISECONDS);
@@ -219,7 +219,7 @@ class SecurityHardeningTest {
         var calls = new AtomicInteger();
         var harness = AttackHarness.start(false, 10_000, server -> server.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(Netty5ClientChannel.@NotNull AuthType object) {
+            public boolean evaluateFilter(NettyClientChannel.@NotNull AuthType object) {
                 calls.incrementAndGet();
                 return true;
             }
@@ -276,7 +276,7 @@ class SecurityHardeningTest {
 
     @Test
     void negativeIdleTimeoutIsRejected() throws Exception {
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         try {
             server.allowAnonymous(true);
             server.idleTimeoutMillis(-1);
@@ -314,27 +314,27 @@ class SecurityHardeningTest {
         var certificate = (X509Certificate) keyStore.getCertificate("server");
 
         var authenticated = new CopyOnWriteArrayList<String>();
-        var server = new Netty5Server("127.0.0.1", 0);
+        var server = new NettyServer("127.0.0.1", 0);
         server.sslContext(SslContextBuilder.forServer(keyManagers).build());
         server.packetRegistry(new PacketRegistry().register(TestPacket.class));
         server.addFilter(new ConnectionFilter() {
             @Override
-            public boolean evaluateFilter(Netty5ClientChannel.@NotNull AuthType auth) {
+            public boolean evaluateFilter(NettyClientChannel.@NotNull AuthType auth) {
                 return ConnectionFilters.tokenEquals("tls-token", auth.authProperty().get("token"));
             }
         });
-        server.addAction(new de.dataflair.netty5.actions.ConnectionAction(channel ->
+        server.addAction(new de.dataflair.netty.actions.ConnectionAction(channel ->
                 authenticated.add(channel.identity().name()),
-                de.dataflair.netty5.actions.ConnectionAction.State.CLIENT_AUTHENTICATED));
+                de.dataflair.netty.actions.ConnectionAction.State.CLIENT_AUTHENTICATED));
         var received = new CompletableFuture<String>();
         server.packetTransmitter().listen(TestPacket.class, (sender, packet) -> received.complete(packet.message()));
-        Netty5Client client = null;
+        NettyClient client = null;
         try {
             server.initialize();
             server.connectionFuture().get(5, TimeUnit.SECONDS);
             int port = server.localAddress().getPort();
 
-            client = new Netty5Client("localhost", port, new Netty5ClientChannel.Identity("tls-client",
+            client = new NettyClient("localhost", port, new NettyClientChannel.Identity("tls-client",
                     UUID.randomUUID()), Map.of("token", "tls-token"));
             client.sslContext(SslContextBuilder.forClient().trustManager(certificate).build());
             client.packetRegistry(new PacketRegistry().register(TestPacket.class));
@@ -423,7 +423,7 @@ class SecurityHardeningTest {
         }
     }
 
-    private static void stop(Netty5Server server) throws InterruptedException {
+    private static void stop(NettyServer server) throws InterruptedException {
         server.shutdownGracefully(0, 1, TimeUnit.SECONDS).await(5, TimeUnit.SECONDS);
         server.workerGroup().terminationFuture().await(5, TimeUnit.SECONDS);
     }

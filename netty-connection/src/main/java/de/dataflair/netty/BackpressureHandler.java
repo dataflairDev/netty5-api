@@ -1,6 +1,6 @@
-package de.dataflair.netty5;
+package de.dataflair.netty;
 
-import de.dataflair.netty5.common.log.SafeLog;
+import de.dataflair.netty.common.log.SafeLog;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -50,9 +50,9 @@ public final class BackpressureHandler extends ChannelDuplexHandler {
             return;
         }
         if (channel.isWritable()) {
-            Netty5ChannelUtils.resumeRead(channel, Netty5ChannelUtils.READ_SUSPENDED_BACKPRESSURE);
+            NettyChannelUtils.resumeRead(channel, NettyChannelUtils.READ_SUSPENDED_BACKPRESSURE);
         } else {
-            Netty5ChannelUtils.suspendRead(channel, Netty5ChannelUtils.READ_SUSPENDED_BACKPRESSURE);
+            NettyChannelUtils.suspendRead(channel, NettyChannelUtils.READ_SUSPENDED_BACKPRESSURE);
         }
         super.channelWritabilityChanged(ctx);
     }

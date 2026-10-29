@@ -1,9 +1,9 @@
-package de.dataflair.netty5.attack;
+package de.dataflair.netty.attack;
 
-import de.dataflair.netty5.Netty5ClientChannel;
-import de.dataflair.netty5.common.packet.Packet;
-import de.dataflair.netty5.testpackets.TestRequestPacket;
-import de.dataflair.netty5.testpackets.TestRespondPacket;
+import de.dataflair.netty.NettyClientChannel;
+import de.dataflair.netty.common.packet.Packet;
+import de.dataflair.netty.testpackets.TestRequestPacket;
+import de.dataflair.netty.testpackets.TestRespondPacket;
 import org.junit.jupiter.api.Test;
 
 import java.net.Socket;
@@ -56,7 +56,7 @@ class Attack06ResponseSpoofTest {
     private static Socket auth(AttackHarness harness, String name) throws Exception {
         var socket = harness.connect();
         AttackHarness.send(socket, AttackHarness.authFrame(name, AttackHarness.TOKEN));
-        Netty5ClientChannel channel = harness.awaitAuthenticated(name, 5_000);
+        NettyClientChannel channel = harness.awaitAuthenticated(name, 5_000);
         if (channel == null) {
             throw new IllegalStateException("not authenticated: " + name);
         }

@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     compileOnly(libs.jetbrains.annotations)
-    implementation(project(":netty5-connection"))
+    implementation(project(":netty-connection"))
     runtimeOnly(libs.slf4j.simple)
 
     testCompileOnly(libs.jetbrains.annotations)
@@ -15,7 +15,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("de.dataflair.netty5.demo.DemoApplication")
+    mainClass.set("de.dataflair.netty.demo.DemoApplication")
 }
 
 tasks.test {

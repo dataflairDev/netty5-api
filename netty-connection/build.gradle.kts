@@ -17,7 +17,7 @@ dependencies {
     runtimeOnly(variantOf(libs.netty.transport.native.epoll) { classifier("linux-x86_64") })
     runtimeOnly(variantOf(libs.netty.transport.native.epoll) { classifier("linux-aarch_64") })
 
-    // CodecBuffer exposes JsonObject and Netty5ChannelUtils loads Gson statically.
+    // CodecBuffer exposes JsonObject and NettyChannelUtils loads Gson statically.
     api(libs.gson)
 
     // Logging facade; applications choose the binding.

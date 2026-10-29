@@ -1,7 +1,7 @@
-package de.dataflair.netty5.common.packet.json;
+package de.dataflair.netty.common.packet.json;
 
-import de.dataflair.netty5.common.codec.CodecBuffer;
-import de.dataflair.netty5.common.packet.RespondPacket;
+import de.dataflair.netty.common.codec.CodecBuffer;
+import de.dataflair.netty.common.packet.RespondPacket;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 

@@ -1,4 +1,4 @@
-package de.dataflair.netty5.filter;
+package de.dataflair.netty.filter;
 
 import org.jetbrains.annotations.Nullable;
 
