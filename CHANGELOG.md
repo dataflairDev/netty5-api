@@ -48,6 +48,8 @@
   `de.dataflair.netty5-api:netty5-connection` are not continued.
 - Every release ships a sources and a javadoc jar and is signed with GPG. Releases are made with `release.ps1` /
   `release.sh` (see the README, "Releasing").
+- Pushing a tag `vX.Y.Z` creates a GitHub Release with the jars, `LICENSE`, `NOTICE` and `SHA256SUMS`
+  (`.github/workflows/release.yml`); Maven Central is released from the same workflow once its secrets are set.
 - Licensed under the Apache License 2.0; the jars carry `LICENSE` and `NOTICE` under `META-INF/`.
 
 ### Packet construction

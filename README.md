@@ -47,6 +47,12 @@ Maven:
 </dependency>
 ```
 
+Without a build tool you can download `netty-connection-<version>.jar` (plus the `-sources` and `-javadoc` jars and
+`SHA256SUMS`) from [GitHub Releases](https://github.com/dataflairDev/netty5-api/releases). The plain jar contains no
+dependencies, so you then have to add Netty 4.2.19 (`netty-common`, `netty-buffer`, `netty-transport`,
+`netty-codec-base`, `netty-handler`, `netty-transport-classes-epoll`, optionally `netty-transport-native-epoll` for
+Linux), Gson 2.15.0 and slf4j-api 2.0.17 to the classpath yourself.
+
 ## Quick start
 
 ### Define packets
@@ -324,6 +330,29 @@ Releases go to Maven Central through the [Central Portal](https://central.sonaty
 [`com.vanniktech.maven.publish`](https://vanniktech.github.io/gradle-maven-publish-plugin/) Gradle plugin. Only
 `netty-connection` is published; `netty-demo` is not. Coordinates and POM data live in `gradle.properties`
 (`GROUP`, `VERSION_NAME`, `POM_*`); credentials never go into the repository.
+
+### GitHub Releases
+
+Pushing a tag `vX.Y.Z` runs the workflow `.github/workflows/release.yml` (it can also be started by hand for an
+existing tag). It checks that the tag matches `VERSION_NAME` in `gradle.properties`, runs `./gradlew clean build`
+and creates a GitHub Release with the jar, the sources and javadoc jars, `LICENSE`, `NOTICE` and `SHA256SUMS`. The
+release notes are the `## X.Y.Z` section of `CHANGELOG.md`.
+
+```shell
+git tag -a v2.0.0 -m "release 2.0.0"
+git push origin v2.0.0
+```
+
+The same workflow also releases to Maven Central (`./gradlew publishAndReleaseToMavenCentral`) as soon as these
+repository secrets are set; without `MAVEN_CENTRAL_USERNAME` that job is skipped:
+
+- `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD` (Central Portal user token)
+- `SIGNING_IN_MEMORY_KEY` (armored secret key, with its real line breaks), `SIGNING_IN_MEMORY_KEY_ID`,
+  `SIGNING_IN_MEMORY_KEY_PASSWORD`
+
+When the tag was already created and pushed by `release.ps1`/`release.sh`, the workflow builds the GitHub Release
+and would publish the same version to Maven Central a second time, which Central rejects; set the secrets only if
+you release through the workflow instead of the scripts.
 
 ### One-time setup
 
