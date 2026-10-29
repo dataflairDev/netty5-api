@@ -73,6 +73,9 @@
   client has the setting as well.
 - `AuthFailureLimiter` counts attempts (`tryAcquire`/`release`) instead of only failures; `ConnectionLimiter` has a
   new constructor with the pre-auth slot limit, the connection rate limiter and the IPv6 prefix length.
+- The unused query consumer was removed from the public constructor of `NettyServerPacketTransmitter`:
+  `(EventLoopGroup, Consumer<Packet>, TriConsumer<RequestPacket, Class<Packet>, Consumer<Packet>>)` is now
+  `(EventLoopGroup, Consumer<Packet>)`. The constructor of `NettyServer` (`(String, int)`) is unchanged.
 
 ### Limits and authentication
 
