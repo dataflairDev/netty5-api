@@ -33,9 +33,8 @@ import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -46,8 +45,8 @@ import java.util.concurrent.TimeUnit;
  * and drops {@link KeepAlivePacket}s. After {@code maxRejectedPackets} (default 16) rejected packets the
  * connection is closed (and re-established by the client).
  */
+@Slf4j
 public final class NettyClientHandler extends SimpleChannelInboundHandler<Packet> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(NettyClientHandler.class);
 
     private final NettyClient client;
     private int rejectedPackets;
@@ -111,7 +110,7 @@ public final class NettyClientHandler extends SimpleChannelInboundHandler<Packet
                 if (future.isSuccess()) {
                     authenticate(ctx);
                 } else {
-                    LOGGER.warn("[client: {}] TLS handshake failed: {}", client.identity().name(),
+                    log.warn("[client: {}] TLS handshake failed: {}", client.identity().name(),
                             SafeLog.clean(future.cause()));
                     ctx.close();
                 }
@@ -142,7 +141,7 @@ public final class NettyClientHandler extends SimpleChannelInboundHandler<Packet
             return;
         }
         if (SafeLog.allow(ctx.channel())) {
-            LOGGER.warn("[client: {}] Exception caught: {}", client.identity().name(), SafeLog.clean(cause));
+            log.warn("[client: {}] Exception caught: {}", client.identity().name(), SafeLog.clean(cause));
         }
         // after a framing error the stream position is lost; a rejected packet is skipped
         if (cause instanceof PacketRejectedException) {

@@ -29,16 +29,16 @@ import io.netty.util.concurrent.Future;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Getter
 public abstract class NettyComponent {
     /**
@@ -58,7 +58,6 @@ public abstract class NettyComponent {
      * Default number of rejected packets after which an authenticated connection is closed.
      */
     public static final int DEFAULT_MAX_REJECTED_PACKETS = 16;
-    private static final Logger LOGGER = LoggerFactory.getLogger(NettyComponent.class);
 
     @Setter(AccessLevel.PROTECTED)
     private volatile CommunicationFuture<Void> connectionFuture = new CommunicationFuture<>();
@@ -171,7 +170,7 @@ public abstract class NettyComponent {
     public static final class CommunicationFuture<E> extends CompletableFuture<E> {
         public CommunicationFuture() {
             this.exceptionally(throwable -> {
-                LOGGER.warn("Communication future failed: {}", SafeLog.clean(throwable));
+                log.warn("Communication future failed: {}", SafeLog.clean(throwable));
                 return null;
             });
         }

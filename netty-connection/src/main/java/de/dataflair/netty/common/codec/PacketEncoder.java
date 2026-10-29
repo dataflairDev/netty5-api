@@ -7,9 +7,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.netty.handler.codec.TooLongFrameException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 
@@ -22,8 +20,8 @@ import java.nio.charset.StandardCharsets;
  * field) would exceed {@code maxFrameLength} fails the same way with a {@link TooLongFrameException}; the peer
  * would reject it anyway.
  */
+@Slf4j
 public final class PacketEncoder extends MessageToByteEncoder<Packet> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(PacketEncoder.class);
     private final NettyClientChannel.Identity identity;
     private final int maxFrameLength;
 
@@ -76,7 +74,7 @@ public final class PacketEncoder extends MessageToByteEncoder<Packet> {
             out.writeInt(readableBytes);
             out.writeBytes(origin, origin.readerIndex(), readableBytes);
         } catch (RuntimeException e) {
-            LOGGER.warn((identity != null ? "[identity: " + identity.name() + "] " : "")
+            log.warn((identity != null ? "[identity: " + identity.name() + "] " : "")
                     + "Error while encoding packet " + msg.getClass().getName());
             throw e;
         }

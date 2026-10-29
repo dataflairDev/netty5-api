@@ -210,7 +210,6 @@ class TransmitterTest {
     @Test
     void serverTransmitterQueryIsUnsupported() {
         var server = new NettyServerPacketTransmitter(group, p -> {
-        }, (a, b, c) -> {
         });
         var request = new TestRequestPacket("t", List.of());
         assertThrows(UnsupportedOperationException.class, () -> server.queryPacket(request, TestRespondPacket.class));

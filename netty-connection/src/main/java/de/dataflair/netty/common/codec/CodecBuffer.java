@@ -1,15 +1,13 @@
 package de.dataflair.netty.common.codec;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import de.dataflair.netty.NettyChannelUtils;
 import de.dataflair.netty.common.log.SafeLog;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -20,6 +18,7 @@ import java.util.function.Supplier;
 /**
  * Represents a protocol buffer that can be used to read and write various data types.
  */
+@Slf4j
 public record CodecBuffer(@NotNull ByteBuf origin) {
     /**
      * Buffers created by {@link #allocate()} are unpooled heap buffers. They are owned by the packet that
@@ -28,7 +27,6 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
      * pooled and are released by the codec, see {@link PacketDecoder}.
      */
     private static final int INITIAL_CAPACITY = 64;
-    private static final Logger LOGGER = LoggerFactory.getLogger(CodecBuffer.class);
     // the content is chosen by the peer: a flood of broken packets must not flood the log
     private static final SafeLog.Throttle LOG_THROTTLE = SafeLog.throttle();
     /**
@@ -85,7 +83,7 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
     public void resetBuffer() {
         if (origin.readableBytes() > 0) {
             if (LOG_THROTTLE.allow()) {
-                LOGGER.warn("Buffer not empty, skipping remaining {} bytes", origin.readableBytes());
+                log.warn("Buffer not empty, skipping remaining {} bytes", origin.readableBytes());
             }
             origin.skipBytes(origin.readableBytes());
         }
@@ -747,14 +745,14 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
     public <T> CodecBuffer writeWithSerializer(@NotNull T object, @NotNull Class<T> clazz) {
         BufferSerializer<T> serializer = findSerializer(clazz);
         if (serializer == null) {
-            LOGGER.warn("No serializer found for class {}", clazz.getName());
+            log.warn("No serializer found for class {}", clazz.getName());
             return this;
         }
 
         try {
             serializer.writeInBuffer(object, this);
         } catch (Exception e) {
-            LOGGER.warn("Error when writing an object of class {}", clazz.getName(), e);
+            log.warn("Error when writing an object of class {}", clazz.getName(), e);
         }
         return this;
     }
@@ -770,7 +768,7 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
         BufferSerializer<T> serializer = findSerializer(clazz);
         if (serializer == null) {
             if (LOG_THROTTLE.allow()) {
-                LOGGER.warn("No serializer found for class {}", clazz.getName());
+                log.warn("No serializer found for class {}", clazz.getName());
             }
             return null;
         }
@@ -779,7 +777,7 @@ public record CodecBuffer(@NotNull ByteBuf origin) {
             return serializer.readFromBuffer(this);
         } catch (Exception e) {
             if (LOG_THROTTLE.allow()) {
-                LOGGER.warn("Error when reading an object of class {}: {}", clazz.getName(), SafeLog.clean(e));
+                log.warn("Error when reading an object of class {}: {}", clazz.getName(), SafeLog.clean(e));
             }
             return null;
         }

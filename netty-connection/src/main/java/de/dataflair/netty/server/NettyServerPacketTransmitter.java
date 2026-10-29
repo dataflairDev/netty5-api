@@ -19,7 +19,6 @@ package de.dataflair.netty.server;
  */
 
 import de.dataflair.netty.NettyClientChannel;
-import de.dataflair.netty.TriConsumer;
 import de.dataflair.netty.common.packet.*;
 import io.netty.channel.EventLoopGroup;
 import org.jetbrains.annotations.NotNull;
@@ -40,13 +39,9 @@ public final class NettyServerPacketTransmitter extends NettyPacketTransmitter {
     private static final String UNSUPPORTED = "The server transmitter has no single peer; query a client through "
             + "its channel: server.clientChannel(...).transmitter().queryPacket(...)";
 
-    private final TriConsumer<RequestPacket, Class<Packet>, Consumer<Packet>> requestPacketConsumer;
-
     public NettyServerPacketTransmitter(EventLoopGroup eventExecutors,
-                                         Consumer<Packet> packetConsumer,
-                                         TriConsumer<RequestPacket, Class<Packet>, Consumer<Packet>> requestPacketConsumer) {
+                                         Consumer<Packet> packetConsumer) {
         super(eventExecutors, packetConsumer);
-        this.requestPacketConsumer = requestPacketConsumer;
     }
 
     /**

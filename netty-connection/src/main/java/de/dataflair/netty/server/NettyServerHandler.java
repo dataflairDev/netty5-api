@@ -36,10 +36,9 @@ import io.netty.handler.codec.DecoderException;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.ScheduledFuture;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -58,8 +57,8 @@ import java.util.concurrent.TimeUnit;
  * the server answers with an {@link AuthAcceptedPacket} carrying the effective identity, and drops
  * {@link KeepAlivePacket}s before any filter or listener.
  */
+@Slf4j
 public final class NettyServerHandler extends SimpleChannelInboundHandler<Packet> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(NettyServerHandler.class);
 
     private enum State {NEW, PENDING, AUTHENTICATED, REJECTED}
 
@@ -136,7 +135,7 @@ public final class NettyServerHandler extends SimpleChannelInboundHandler<Packet
                 try {
                     accepted = connectionFilter.evaluateFilter(auth);
                 } catch (RuntimeException e) {
-                    LOGGER.warn("{}Connection filter failed for {}: {}", server.prefix(), name, SafeLog.clean(e));
+                    log.warn("{}Connection filter failed for {}: {}", server.prefix(), name, SafeLog.clean(e));
                     failAuthentication(ctx, name, address);
                     return;
                 }
@@ -166,7 +165,7 @@ public final class NettyServerHandler extends SimpleChannelInboundHandler<Packet
         }
         result.whenComplete((accepted, throwable) -> ctx.executor().execute(() -> {
             if (throwable != null) {
-                LOGGER.warn("{}Async connection filter failed for {}: {}", server.prefix(), name,
+                log.warn("{}Async connection filter failed for {}: {}", server.prefix(), name,
                         SafeLog.clean(throwable));
             }
             finishAsyncAuthentication(ctx, nettyChannel, name, address, throwable == null && Boolean.TRUE.equals(accepted));
@@ -311,7 +310,7 @@ public final class NettyServerHandler extends SimpleChannelInboundHandler<Packet
                 try {
                     connectionAction.consumer().accept(channel);
                 } catch (RuntimeException e) {
-                    LOGGER.warn("{}Connection action failed ({}): {}", server.prefix(), state, SafeLog.clean(e));
+                    log.warn("{}Connection action failed ({}): {}", server.prefix(), state, SafeLog.clean(e));
                 }
             }
         }
@@ -327,7 +326,7 @@ public final class NettyServerHandler extends SimpleChannelInboundHandler<Packet
 
     private void log(ChannelHandlerContext ctx, String message, Object... arguments) {
         if (SafeLog.allow(ctx.channel())) {
-            LOGGER.warn(server.prefix() + message, arguments);
+            log.warn(server.prefix() + message, arguments);
         }
     }
 

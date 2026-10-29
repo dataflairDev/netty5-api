@@ -24,9 +24,8 @@ import io.netty.util.concurrent.EventExecutor;
 import lombok.Getter;
 import lombok.Setter;
 import de.dataflair.netty.common.log.SafeLog;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.jetbrains.annotations.Nullable;
 
 import java.security.SecureRandom;
@@ -47,9 +46,9 @@ import java.util.function.Function;
  * All registries are thread-safe. Pending requests are completed by the event loop that receives the response;
  * they time out after {@link #requestTimeoutMillis()} milliseconds.
  */
+@Slf4j
 @Getter
 public abstract class NettyPacketTransmitter {
-    private static final Logger LOGGER = LoggerFactory.getLogger(NettyPacketTransmitter.class);
     /**
      * Default timeout for requests in milliseconds.
      */
@@ -132,7 +131,7 @@ public abstract class NettyPacketTransmitter {
                                                @NotNull Consumer<P> callback) {
         this.query(requestPacket, packetClass).whenComplete((response, throwable) -> {
             if (throwable != null) {
-                LOGGER.warn("Request {} failed: {}", requestPacket.getClass().getName(), SafeLog.clean(throwable));
+                log.warn("Request {} failed: {}", requestPacket.getClass().getName(), SafeLog.clean(throwable));
                 return;
             }
             callback.accept(response);
@@ -242,7 +241,7 @@ public abstract class NettyPacketTransmitter {
      */
     public void call(@NotNull Packet packet, @Nullable NettyClientChannel sender) {
         if (packet instanceof RespondPacket respondPacket && !this.completeRequest(respondPacket)) {
-            LOGGER.debug("Unsolicited response {} dropped", packet.getClass().getName());
+            log.debug("Unsolicited response {} dropped", packet.getClass().getName());
             return;
         }
 

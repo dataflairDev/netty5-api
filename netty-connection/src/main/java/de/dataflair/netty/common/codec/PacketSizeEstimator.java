@@ -30,7 +30,7 @@ public final class PacketSizeEstimator implements MessageSizeEstimator {
 
         private int size(Packet packet) {
             var buffer = packet.buffer();
-            var content = buffer == null || buffer.origin() == null ? 0 : buffer.origin().readableBytes();
+            var content = buffer == null ? 0 : buffer.origin().readableBytes();
             return (int) Math.min(Integer.MAX_VALUE, (long) content + OVERHEAD);
         }
     };

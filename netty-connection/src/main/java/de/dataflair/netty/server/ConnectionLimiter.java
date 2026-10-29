@@ -5,10 +5,9 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.AttributeKey;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -29,9 +28,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * </ul>
  * Prefixes are IPv4 /32 and IPv6 {@code ipv6PrefixLength} (default /64).
  */
+@Slf4j
 @ChannelHandler.Sharable
 public final class ConnectionLimiter extends ChannelInboundHandlerAdapter {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionLimiter.class);
     private static final long LOG_INTERVAL_MILLIS = 1_000;
     private static final AttributeKey<AtomicBoolean> PRE_AUTH_SLOT =
             AttributeKey.valueOf("netty-api.pre-auth-slot");
@@ -168,7 +167,7 @@ public final class ConnectionLimiter extends ChannelInboundHandlerAdapter {
         var now = System.currentTimeMillis();
         var last = lastLog.get();
         if (now - last >= LOG_INTERVAL_MILLIS && lastLog.compareAndSet(last, now)) {
-            LOGGER.warn(message, arguments);
+            log.warn(message, arguments);
         }
     }
 }

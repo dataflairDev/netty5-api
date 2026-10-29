@@ -31,18 +31,13 @@ import io.netty.channel.epoll.Epoll;
 import io.netty.util.concurrent.Future;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -57,6 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * With an {@link #sslContext()} the {@code AuthPacket} is only sent after the TLS handshake has succeeded, and the
  * server certificate must match the host name ({@code endpointIdentificationAlgorithm=HTTPS}).
  */
+@Slf4j
 @Getter
 public final class NettyClient extends NettyComponent {
     /**
@@ -64,7 +60,6 @@ public final class NettyClient extends NettyComponent {
      */
     public static final long DEFAULT_KEEP_ALIVE_INTERVAL_MILLIS = 60_000;
     private static final AtomicInteger RECONNECT_THREAD_ID = new AtomicInteger();
-    private static final Logger LOGGER = LoggerFactory.getLogger(NettyClient.class);
 
     private final NettyClientChannel.Identity identity;
     private final Map<String, String> authProperty;
@@ -104,9 +99,9 @@ public final class NettyClient extends NettyComponent {
     private volatile CompletableFuture<NettyClientChannel.Identity> authenticationFuture = new CompletableFuture<>();
 
     public NettyClient(@NotNull String hostname,
-                        int port,
-                        @NotNull NettyClientChannel.Identity identity,
-                        @Nullable Map<String, String> authProperty) {
+                       int port,
+                       @NotNull NettyClientChannel.Identity identity,
+                       @Nullable Map<String, String> authProperty) {
         super(0, hostname, port);
         this.identity = identity;
         this.authProperty = authProperty == null ? new HashMap<>() : authProperty;
@@ -189,9 +184,6 @@ public final class NettyClient extends NettyComponent {
     }
 
     /**
-     * Called by the handler when an established connection is lost.
-     */
-    /**
      * @return true if the client is connected and its outbound buffer is below the high water mark
      */
     public boolean isWritable() {
@@ -220,7 +212,7 @@ public final class NettyClient extends NettyComponent {
             reconnectScheduler.schedule(() -> {
                 if (this.connectionState() == ConnectionState.DISCONNECTED ||
                         this.connectionState() == ConnectionState.SEASON_CLOSED) {
-                    LOGGER.info("[client: {}] Attempting to reconnect", identity.name());
+                    log.info("[client: {}] Attempting to reconnect", identity.name());
                     connect();
                 }
             }, reconnectDelayMillis, TimeUnit.MILLISECONDS);
@@ -233,7 +225,9 @@ public final class NettyClient extends NettyComponent {
      * Stops reconnecting, closes the connection and shuts down the event loop group and the reconnect scheduler.
      */
     @Override
-    public Future<?> shutdownGracefully(long quietPeriod, long timeout, @NotNull TimeUnit unit) {
+    public Future<?> shutdownGracefully(long quietPeriod,
+                                        long timeout,
+                                        @NotNull TimeUnit unit) {
         shuttingDown = true;
         reconnectScheduler.shutdownNow();
         var channel = this.thisChannel;

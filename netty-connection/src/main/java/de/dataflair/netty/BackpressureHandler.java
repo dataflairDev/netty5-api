@@ -4,8 +4,7 @@ import de.dataflair.netty.common.log.SafeLog;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Bounds the outbound buffer of a channel.
@@ -20,8 +19,8 @@ import org.slf4j.LoggerFactory;
  *     keeps writing on its own), the channel is closed.</li>
  * </ul>
  */
+@Slf4j
 public final class BackpressureHandler extends ChannelDuplexHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BackpressureHandler.class);
 
     private final long maxOutboundBufferBytes;
     private final boolean suspendReadWhenUnwritable;
@@ -64,7 +63,7 @@ public final class BackpressureHandler extends ChannelDuplexHandler {
         var outbound = channel.unsafe().outboundBuffer();
         if (outbound != null && channel.isActive() && outbound.totalPendingWriteBytes() > maxOutboundBufferBytes) {
             if (SafeLog.allow(channel)) {
-                LOGGER.warn("Outbound buffer of {} exceeds {} bytes ({} pending), closing", channel.remoteAddress(),
+                log.warn("Outbound buffer of {} exceeds {} bytes ({} pending), closing", channel.remoteAddress(),
                         maxOutboundBufferBytes, outbound.totalPendingWriteBytes());
             }
             ctx.close();

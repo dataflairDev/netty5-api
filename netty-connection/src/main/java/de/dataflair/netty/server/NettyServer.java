@@ -193,8 +193,6 @@ public final class NettyServer extends NettyComponent {
         super(1, hostname, port);
         this.packetTransmitter = new NettyServerPacketTransmitter(bossGroup(), packet -> {
 
-        }, (requestPacket, packetClass, consumer) -> {
-
         });
     }
 

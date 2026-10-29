@@ -81,11 +81,7 @@ public final class PrefixRateLimiter {
         var key = key(address);
         var now = clock.getAsLong();
         synchronized (buckets) {
-            var bucket = buckets.get(key);
-            if (bucket == null) {
-                bucket = new Bucket(now);
-                buckets.put(key, bucket);
-            }
+            var bucket = buckets.computeIfAbsent(key, k -> new Bucket(now));
             bucket.refill(now);
             if (bucket.tokens < 1) {
                 return false;
@@ -105,11 +101,7 @@ public final class PrefixRateLimiter {
         var key = key(address);
         var now = clock.getAsLong();
         synchronized (buckets) {
-            var bucket = buckets.get(key);
-            if (bucket == null) {
-                bucket = new Bucket(now);
-                buckets.put(key, bucket);
-            }
+            var bucket = buckets.computeIfAbsent(key, k -> new Bucket(now));
             bucket.refill(now);
             bucket.tokens = Math.max(0, bucket.tokens - 1);
         }

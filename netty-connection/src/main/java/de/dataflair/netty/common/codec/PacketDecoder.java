@@ -35,9 +35,8 @@ import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.MessageToMessageDecoder;
 import de.dataflair.netty.common.log.SafeLog;
 import de.dataflair.netty.common.packet.Packet;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -59,12 +58,12 @@ import java.util.List;
  * {@link ExceptionInInitializerError}, {@link StackOverflowError} or {@link LinkageError}) drops the frame and
  * closes the channel. Frames that are still buffered when the channel has been closed are not decoded.
  */
+@Slf4j
 public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
     /**
      * Maximum length of a class name in bytes.
      */
     public static final int MAX_CLASS_NAME_LENGTH = 1024;
-    private static final Logger LOGGER = LoggerFactory.getLogger(PacketDecoder.class);
     private static final String AUTH_PACKET_NAME = AuthPacket.class.getName();
 
     private final NettyClientChannel.Identity identity;
@@ -147,7 +146,7 @@ public final class PacketDecoder extends MessageToMessageDecoder<ByteBuf> {
         var content = Unpooled.buffer(contentLength);
         frame.readBytes(content, contentLength);
         if (frame.isReadable() && SafeLog.allow(ctx.channel())) {
-            LOGGER.warn("{}Frame not empty after decoding {}, skipping {} bytes", prefix(), safeName,
+            log.warn("{}Frame not empty after decoding {}, skipping {} bytes", prefix(), safeName,
                     frame.readableBytes());
         }
 
