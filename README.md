@@ -20,6 +20,33 @@ The `netty-demo` module contains a complete, runnable example
 - Java 27
 - an SLF4J 2 binding if you want to see the log output of the library
 
+## Installation
+
+The library is published to Maven Central as `io.github.dataflairdev:netty-connection` (available after the first
+release). Netty, Gson and the SLF4J API come along as transitive dependencies.
+
+Gradle (Kotlin DSL):
+
+```kotlin
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("io.github.dataflairdev:netty-connection:2.0.0")
+}
+```
+
+Maven:
+
+```xml
+<dependency>
+    <groupId>io.github.dataflairdev</groupId>
+    <artifactId>netty-connection</artifactId>
+    <version>2.0.0</version>
+</dependency>
+```
+
 ## Quick start
 
 ### Define packets
@@ -290,3 +317,81 @@ falls back to a built-in token and logs a warning.
 
 See [CHANGELOG.md](CHANGELOG.md) for the breaking changes in 2.0.0 (Netty 4.2, Java 27, packet construction,
 query wire format, limits and authentication).
+
+## Releasing
+
+Releases go to Maven Central through the [Central Portal](https://central.sonatype.com) with the
+[`com.vanniktech.maven.publish`](https://vanniktech.github.io/gradle-maven-publish-plugin/) Gradle plugin. Only
+`netty-connection` is published; `netty-demo` is not. Coordinates and POM data live in `gradle.properties`
+(`GROUP`, `VERSION_NAME`, `POM_*`); credentials never go into the repository.
+
+### One-time setup
+
+1. Create an account on [central.sonatype.com](https://central.sonatype.com), preferably by signing in with the
+   GitHub account that owns `dataflairDev`.
+2. Verify the namespace `io.github.dataflairdev` under *Namespaces*. With a GitHub login it is verified
+   automatically; otherwise the portal shows a verification key, create a temporary public repository with that
+   name under `github.com/dataflairDev`, press *Verify* and delete the repository afterwards.
+3. Generate a user token under *View Account* -> *Generate User Token*. It consists of a user name and a
+   password and replaces your login for uploads.
+4. Create a GPG key for signing and publish its public part:
+
+   ```shell
+   gpg --full-generate-key                       # RSA 4096 or ed25519, with a passphrase
+   gpg --list-secret-keys --keyid-format=long    # the long key id, e.g. 0123456789ABCDEF
+   gpg --keyserver keyserver.ubuntu.com --send-keys 0123456789ABCDEF
+   gpg --keyserver keys.openpgp.org --send-keys 0123456789ABCDEF
+   gpg --export-secret-keys --armor 0123456789ABCDEF > signing-key.asc   # for signingInMemoryKey, see below
+   ```
+
+5. Put the credentials into `~/.gradle/gradle.properties` (your user home, never this repository):
+
+   ```properties
+   mavenCentralUsername=<token user name>
+   mavenCentralPassword=<token password>
+
+   # the armored secret key from signing-key.asc, with every line break replaced by \n
+   signingInMemoryKey=-----BEGIN PGP PRIVATE KEY BLOCK-----\n...\n-----END PGP PRIVATE KEY BLOCK-----
+   signingInMemoryKeyId=89ABCDEF
+   signingInMemoryKeyPassword=<key passphrase>
+   ```
+
+   Instead of the in-memory key you can use a key ring file (`signing.keyId`, `signing.password`,
+   `signing.secretKeyRingFile`). Each property can also be passed as an environment variable
+   `ORG_GRADLE_PROJECT_<name>`, e.g. `ORG_GRADLE_PROJECT_mavenCentralPassword`. Delete `signing-key.asc` once the
+   key is stored.
+
+### Publishing a version
+
+Run the release script from an up-to-date `main`, always with a dry run first:
+
+```shell
+./release.ps1 2.0.0 -DryRun     # Windows PowerShell 5.1 / PowerShell 7
+./release.ps1 2.0.0
+
+./release.sh 2.0.0 --dry-run    # bash
+./release.sh 2.0.0
+```
+
+Both scripts do the same:
+
+- refuse to run unless the work tree is clean (changes under `.idea/` only produce a warning), the branch is `main`,
+  `main` equals `origin/main`, the tag `v<version>` does not exist yet and the credentials above are present
+  (they are checked, never printed);
+- if `VERSION_NAME` in `gradle.properties` differs from the requested version, commit the new value as
+  `release <version>` (a dry run builds the version via `-PVERSION_NAME` and changes no file);
+- run `./gradlew clean build` with the full test suite;
+- dry run: publish into `build/release-dry-run/m2` (not `~/.m2`), sign every artifact and check that jar, sources,
+  javadoc, POM and Gradle module metadata and their `.asc` signatures exist, then stop;
+- otherwise: `./gradlew publishAndReleaseToMavenCentral`, which uploads, waits for validation and releases;
+  then create the annotated tag `v<version>` and push it (together with `main` if a version commit was made).
+
+Any failure aborts with a non-zero exit code; a version commit made before an upload is rolled back. It can take
+up to about 30 minutes until a released version is visible on Maven Central. `./gradlew publishToMavenLocal` works
+without any signing key for local testing.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). You may use, modify and redistribute the library, also
+commercially. Redistributions must keep the attribution in [NOTICE](NOTICE) (Apache-2.0, section 4); the published
+jars carry `LICENSE` and `NOTICE` under `META-INF/`.

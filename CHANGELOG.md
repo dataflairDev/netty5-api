@@ -14,7 +14,7 @@
 - The prefix of derived identity UUIDs changed from `"netty5-api:identity:"` to `"netty-api:identity:"`, so
   `NettyIdentities.derivedUuid(name)` returns a different UUID for the same name than earlier 2.0.0 builds. Stored
   derived UUIDs must be recomputed.
-- The Gradle root project is `netty-api`, the Maven group `de.dataflair.netty-api`; the artifactId follows the
+- The Gradle root project is `netty-api`, the Maven group `io.github.dataflairdev`; the artifactId follows the
   module name (`netty-connection`). Channel attribute keys (`netty-api.*`) and the reconnect thread name
   (`netty-client-reconnect-*`) follow the new name.
 
@@ -24,7 +24,7 @@
 | module `netty5-connection` | module `netty-connection` |
 | module `netty5-demo` | module `netty-demo` |
 | root project `netty5-api` | root project `netty-api` |
-| group `de.dataflair.netty5-api` | group `de.dataflair.netty-api` |
+| group `de.dataflair.netty5-api` | group `io.github.dataflairdev` |
 | `Netty5ChannelInitializer` | `NettyChannelInitializer` |
 | `Netty5ChannelUtils` | `NettyChannelUtils` |
 | `Netty5ClientChannel` | `NettyClientChannel` |
@@ -40,6 +40,15 @@
 | `server.Netty5ServerPacketTransmitter` | `server.NettyServerPacketTransmitter` |
 | identity UUID prefix `"netty5-api:identity:"` | `"netty-api:identity:"` |
 | environment variable `NETTY5_DEMO_TOKEN` | `NETTY_DEMO_TOKEN` |
+
+### Publishing and license
+
+- Published to Maven Central as `io.github.dataflairdev:netty-connection` instead of the private `rp1.dataflair.cloud`
+  repository; consumers only need `mavenCentral()`. The 1.x coordinates
+  `de.dataflair.netty5-api:netty5-connection` are not continued.
+- Every release ships a sources and a javadoc jar and is signed with GPG. Releases are made with `release.ps1` /
+  `release.sh` (see the README, "Releasing").
+- Licensed under the Apache License 2.0; the jars carry `LICENSE` and `NOTICE` under `META-INF/`.
 
 ### Packet construction
 

@@ -3,15 +3,16 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     id("java")
     alias(libs.plugins.shadow)
+    alias(libs.plugins.maven.publish) apply false
 }
 
 allprojects {
     apply(plugin = "java-library")
-    apply(plugin = "maven-publish")
     apply(plugin = "com.gradleup.shadow")
 
-    group = "de.dataflair.netty-api"
-    version = "2.0.0"
+    // GROUP and VERSION_NAME live in gradle.properties; VERSION_NAME can be overridden with -PVERSION_NAME=...
+    group = providers.gradleProperty("GROUP").getOrElse("io.github.dataflairdev")
+    version = providers.gradleProperty("VERSION_NAME").get()
 
     repositories {
         mavenCentral()
