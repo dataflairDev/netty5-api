@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1
+
+### Platform
+
+- Targets Java 25 bytecode, so the library runs on Java 25 runtimes such as Paper 26.x. Requires Java 25.
+
 ## 2.0.0
 
 ### Platform

@@ -17,7 +17,7 @@ The `netty-demo` module contains a complete, runnable example
 
 ## Requirements
 
-- Java 27
+- Java 25
 - an SLF4J 2 binding if you want to see the log output of the library
 
 ## Installation
@@ -33,7 +33,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.dataflairdev:netty-connection:2.0.0")
+    implementation("io.github.dataflairdev:netty-connection:2.0.1")
 }
 ```
 
@@ -43,7 +43,7 @@ Maven:
 <dependency>
     <groupId>io.github.dataflairdev</groupId>
     <artifactId>netty-connection</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
